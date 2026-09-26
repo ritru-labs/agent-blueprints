@@ -17,6 +17,7 @@ class ResultGateTests(unittest.TestCase):
         phase1b = json.loads((HERE.parent / "trusted-verifier/evidence/phase-1b-verification.json").read_text())
         self.run = {"session_id": phase1b["source"]["session_id"]}
         self.candidate = {
+            "source_session_id": self.run["session_id"],
             "source_artifact_id": phase1b["source"]["artifact_id"],
             "archive_sha256": phase1b["source"]["artifact_sha256"],
             "tree_sha256": phase1b["candidate_tree_sha256"],

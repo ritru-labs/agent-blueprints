@@ -8,6 +8,7 @@ from typing import Protocol
 @dataclass(frozen=True)
 class CandidateInput:
     session_id: str
+    turn_id: str
     artifact_id: str
     archive_sha256: str
     archive_bytes: bytes
@@ -19,5 +20,5 @@ class CandidateSource(Protocol):
 
 
 class TrustedVerifier(Protocol):
-    def verify(self, artifact_path: Path) -> dict:
+    def verify(self, artifact_path: Path, candidate: dict) -> dict:
         ...

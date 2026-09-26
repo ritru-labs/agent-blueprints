@@ -155,18 +155,27 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--artifact", type=pathlib.Path, default=DEFAULT_ARTIFACT)
     parser.add_argument("--output", type=pathlib.Path, default=OUTPUT)
+    parser.add_argument("--expected-sha256")
+    parser.add_argument("--source-session-id")
+    parser.add_argument("--source-artifact-id")
     args = parser.parse_args()
-    trusted = json.loads(EVIDENCE.read_text())
+    supplied = (args.expected_sha256, args.source_session_id, args.source_artifact_id)
+    if any(supplied) and not all(supplied):
+        parser.error("expected digest, session ID, and artifact ID must be supplied together")
+    trusted = json.loads(EVIDENCE.read_text()) if not all(supplied) else None
+    source_session_id = args.source_session_id or trusted["session"]["id"]
+    source_artifact_id = args.source_artifact_id or trusted["artifact"]["id"]
+    expected_sha256 = args.expected_sha256 or trusted["artifact"]["sha256"]
     result = {
         "schema_version": 1,
         "phase": "1B",
         "verified_at_utc": datetime.datetime.now(datetime.timezone.utc).isoformat(),
-        "source_session_id": trusted["session"]["id"],
-        "source_artifact_id": trusted["artifact"]["id"],
+        "source_session_id": source_session_id,
+        "source_artifact_id": source_artifact_id,
         "status": "FAIL",
     }
     try:
-        result.update(verify(args.artifact, trusted["artifact"]["sha256"]))
+        result.update(verify(args.artifact, expected_sha256))
     except (OSError, ValueError, RuntimeError, subprocess.SubprocessError, zipfile.BadZipFile) as error:
         result["error"] = str(error)[:300]
     args.output.parent.mkdir(parents=True, exist_ok=True)

@@ -36,7 +36,7 @@ def main():
     database = Store(args.dsn)
     if args.command == "init-db":
         database.migrate()
-        print("Phase 1C PostgreSQL schema version 1 ready")
+        print("Phase 1C/1D PostgreSQL schema version 2 ready")
         return 0
     policy = Policy.load(args.policy)
     controller = Controller(database, policy, ContentAddressedStore(args.store_dir),

@@ -14,6 +14,7 @@ import uuid
 from datetime import datetime, timezone
 
 import psycopg
+from psycopg import sql
 from psycopg.types.json import Jsonb
 
 from adapters import PHASE1A, ContentAddressedStore, Phase1BTrustedVerifier
@@ -88,6 +89,16 @@ class RecoveryTests(unittest.TestCase):
              str(store_dir or self.store_dir), *arguments],
             cwd=HERE, env=env, capture_output=True, text=True, timeout=240, check=False,
         )
+
+    def setUp(self):
+        # A saved Agents session belongs to one workflow. Keep the original
+        # Phase 1A session fixture, but give each independent test its own DB.
+        db_name = f"phase1c_{uuid.uuid4().hex[:12]}"
+        with psycopg.connect(self.__class__.dsn, autocommit=True) as admin:
+            admin.execute(sql.SQL("CREATE DATABASE {}").format(sql.Identifier(db_name)))
+        self.dsn = f"host={self.socket} dbname={db_name} user={getpass.getuser()}"
+        self.database = Store(self.dsn)
+        self.database.migrate()
 
     def test_real_process_restart_and_exact_candidate_link(self):
         first = self.cli("start", "--task", "DEMO-101", "--source-archive",

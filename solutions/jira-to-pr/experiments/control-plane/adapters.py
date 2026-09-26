@@ -32,7 +32,23 @@ class Phase1ASavedArtifact:
         evidence = json.loads(self.evidence_path.read_text())
         artifact = evidence["artifact"]
         digest, _ = read_candidate(self.archive_path, artifact["sha256"])
-        return CandidateInput(evidence["session"]["id"], artifact["id"],
+        return CandidateInput(evidence["session"]["id"], artifact["turn_id"], artifact["id"],
+                              digest, self.archive_path.read_bytes())
+
+
+class SavedTurnArtifact:
+    """Artifact bytes plus IDs checked against saved Agents API records by the caller."""
+
+    def __init__(self, session_id, turn_id, artifact_id, archive_sha256, archive_path):
+        self.session_id = session_id
+        self.turn_id = turn_id
+        self.artifact_id = artifact_id
+        self.archive_sha256 = archive_sha256
+        self.archive_path = pathlib.Path(archive_path)
+
+    def read(self):
+        digest, _ = read_candidate(self.archive_path, self.archive_sha256)
+        return CandidateInput(self.session_id, self.turn_id, self.artifact_id,
                               digest, self.archive_path.read_bytes())
 
 
@@ -101,14 +117,17 @@ def reconstruct_tree_hash(artifact_path, archive_sha256, base_commit):
 
 
 class Phase1BTrustedVerifier:
-    def verify(self, artifact_path):
+    def verify(self, artifact_path, candidate):
         with tempfile.TemporaryDirectory(prefix="phase1c-verifier-") as temporary:
             output = pathlib.Path(temporary) / "result.json"
             env = {key: os.environ[key] for key in
                    ("PATH", "HOME", "DOCKER_HOST", "DOCKER_CONFIG") if key in os.environ}
             result = subprocess.run(
                 [sys.executable, str(PHASE1B / "verify_candidate.py"),
-                 "--artifact", str(artifact_path), "--output", str(output)],
+                 "--artifact", str(artifact_path), "--output", str(output),
+                 "--expected-sha256", candidate["archive_sha256"],
+                 "--source-session-id", candidate["source_session_id"],
+                 "--source-artifact-id", candidate["source_artifact_id"]],
                 env=env, cwd=PHASE1B, capture_output=True, text=True,
                 timeout=180, check=False,
             )
