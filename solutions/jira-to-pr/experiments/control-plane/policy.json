@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "repository": "ritru-labs/agent-blueprints",
+  "base_commit": "7a081367533aa19bcb80d13122e0f3664358a5b8",
+  "verifier_image_id": "sha256:2f17fc044b579bab302c2e8054d3a686e2cb9a83de48e70534b94cd8ebbe06a9",
+  "max_repair_attempts": 2,
+  "allowed_operation_kinds": ["synthetic_notice"],
+  "external_writes_enabled": false,
+  "verifier_network_mode": "none"
+}

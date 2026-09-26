@@ -1,0 +1,43 @@
+{
+  "negative_integrity": {
+    "forged_candidate_hash_link_rejected": true,
+    "illegal_transition_rejected": true,
+    "interrupted_process_exit_code": 75,
+    "tampered_artifact_state_after_restart": "NEEDS_HUMAN",
+    "verification_count": 0
+  },
+  "observed_at_utc": "2026-09-26T18:44:47.933627+00:00",
+  "phase": "1C",
+  "positive_recovery": {
+    "artifact_sha256": "28ac19606a8ffa3e62833132107110abac1bc33ff621cf1de7926e1d07d30dda",
+    "candidate_and_verification_updates_rejected": true,
+    "candidate_count": 1,
+    "candidate_id": "a6e36ace-04a6-41a0-b686-e68f0cba53f4",
+    "candidate_tree_sha256": "27ce9688fd58e3eac336c87293a99be1d5410ca93d76744cb6c3dbd9bfbe64cc",
+    "changed_payload_rejected": true,
+    "competing_worker_blocked": true,
+    "event_count_after_repeated_resume": 4,
+    "interrupted_process_exit_code": 75,
+    "policy_drift_rejected": true,
+    "policy_sha256": "f6728ac8d27bc6770be43d0bed730706b5eb8567ee9bb4e8e0ba48e103e883a2",
+    "run_id": "e14e7029-191f-4e75-8091-75732bde9e39",
+    "same_idempotency_key_same_operation": true,
+    "same_ids_after_repeated_resume": true,
+    "source_copy_removed_before_resume": true,
+    "state_after_interrupt": "CANDIDATE_READY",
+    "state_after_restart": "VERIFIED",
+    "unknown_outcome_retry_blocked": true,
+    "verification_count": 1,
+    "verification_id": "60a95479-984b-46c1-99b7-a12cb5eedbbc"
+  },
+  "post_verification_integrity": {
+    "historical_verification_retained": true,
+    "new_operation_blocked": true,
+    "state_after_tamper": "NEEDS_HUMAN",
+    "state_before_tamper": "VERIFIED",
+    "verification_count": 1
+  },
+  "postgres_server_version": "17.11 (Homebrew)",
+  "schema_version": 1,
+  "status": "PASS"
+}
