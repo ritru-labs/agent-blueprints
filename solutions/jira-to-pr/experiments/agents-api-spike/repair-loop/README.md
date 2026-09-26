@@ -18,4 +18,6 @@ The live command consumes API and hosted sandbox usage. It refuses to start anot
 
 No candidate-controlled test output, prompts, reasoning, API key, raw logs, or ZIP bytes are checked into evidence or sent as feedback. The finding parser recognizes known verifier test names only and maps them to fixed messages; any unrecognized or boundary failure stops the automatic repair. The trusted verifier runs candidate code in the existing pinned, network-isolated Docker configuration. The downloaded ZIP is checked by the existing strict Phase 1B intake before execution.
 
-This is a live feasibility proof alongside Phase 1C, not a durable workflow transition in the PostgreSQL control plane. Candidate history, repair budget, and crash recovery for this two-turn workflow still need to be connected to PostgreSQL before production use. No Jira or GitHub workflow writes are performed.
+This original script is a live feasibility proof alongside Phase 1C; it does not write durable workflow transitions to PostgreSQL. No Jira or GitHub workflow writes are performed.
+
+The subsequent [Phase 1D-B integrated proof](../../control-plane/PHASE-1D-RESULTS.md) connects this behavior to PostgreSQL with durable candidate and verification history, repair intent, and a real process restart. This original script remains the isolated feasibility record.

@@ -1,0 +1,96 @@
+{
+  "counts": {
+    "candidate_count": 2,
+    "repair_count": 1,
+    "session_count": 1,
+    "verification_count": 2
+  },
+  "first": {
+    "artifact_id": "artifact_f86c9488a8674cf193f6d96b69db2b35a09df624966e4433b7",
+    "artifact_sha256": "3522cd0fbb0368ba94b6ead8452226ca9f524b829687106270dfdefa594ac682",
+    "candidate_id": "8d0a5d6e-3b39-4d73-99c6-4308c072805a",
+    "checks": [
+      {
+        "exit_code": 1,
+        "name": "trusted_requirement",
+        "ok": false,
+        "test_count": 5,
+        "timed_out": false
+      }
+    ],
+    "findings": [
+      {
+        "code": "ADD_ARITHMETIC",
+        "message": "add(a, b) must return the arithmetic sum for positive, zero, and negative integers."
+      }
+    ],
+    "ordinal": 1,
+    "session_id": "sess_0845b6cce5a435d1006ab81e9586d48199a9f2139acd4beb0c",
+    "tree_sha256": "4e8ca8b19995bf96627127eaf73b7a2b8b34fa73f11e59951e8c1da2ea4fc72b",
+    "turn_id": "turn_0845b6cce5a435d1006ab81e9a0ebc81998124e870ac347d38",
+    "verification_id": "c543602f-b0b1-4af5-a9fc-30b1b47f3b2a",
+    "verification_status": "FAIL",
+    "verifier_image_id": "sha256:2f17fc044b579bab302c2e8054d3a686e2cb9a83de48e70534b94cd8ebbe06a9"
+  },
+  "phase": "1D-B",
+  "policy_sha256": "f6728ac8d27bc6770be43d0bed730706b5eb8567ee9bb4e8e0ba48e103e883a2",
+  "primary_session_id": "sess_0845b6cce5a435d1006ab81e9586d48199a9f2139acd4beb0c",
+  "process_restart": {
+    "intentional_first_exit_code": 75,
+    "repeated_resume_changed_history": false,
+    "saved_message_reconciled_before_candidate_2": true,
+    "state_after_restart": "VERIFIED",
+    "state_before_restart": "REPAIR_INPUT_UNKNOWN"
+  },
+  "repair": {
+    "failed_candidate_id": "8d0a5d6e-3b39-4d73-99c6-4308c072805a",
+    "failed_verification_id": "c543602f-b0b1-4af5-a9fc-30b1b47f3b2a",
+    "id": "189100df-f66d-4c86-a216-a12766f6e8c9",
+    "input_key": "856a6b510665b7b2be114eff5121ac6adec95e42d4ab6b63adf28ba9b7a496d2",
+    "input_sha256": "6b78de89730dfb4858ae2511e2143d7e710f676425bf9265e0f1b104b347297e",
+    "message_item_id": "msg_a905a257e80a2e98cd377ee293356fcc70b35f6fab199ae85c",
+    "ordinal": 1,
+    "result_turn_id": "turn_0845b6cce5a435d1006ab81ecc90048199a222a7887edc294d",
+    "session_id": "sess_0845b6cce5a435d1006ab81e9586d48199a9f2139acd4beb0c",
+    "status": "OBSERVED"
+  },
+  "repaired": {
+    "artifact_id": "artifact_756f085e3e464bf7b56be3832474eb6afe23fc410923431aac",
+    "artifact_sha256": "78094e2c726ff8477acd24fb93cebce7e1d118d377b8bb05209b6a80ca14d8e4",
+    "candidate_id": "77bc086b-be6c-4223-a8c9-f180b07bc90e",
+    "checks": [
+      {
+        "exit_code": 0,
+        "name": "trusted_requirement",
+        "ok": true,
+        "test_count": 5,
+        "timed_out": false
+      },
+      {
+        "exit_code": 0,
+        "name": "candidate_tests",
+        "ok": true,
+        "test_count": 6,
+        "timed_out": false
+      }
+    ],
+    "findings": [],
+    "ordinal": 2,
+    "session_id": "sess_0845b6cce5a435d1006ab81e9586d48199a9f2139acd4beb0c",
+    "tree_sha256": "afd4ecb6cdaa7b7984f8ff8549a56e150633fdd7236e68b69eee2cff9f6f481d",
+    "turn_id": "turn_0845b6cce5a435d1006ab81ecc90048199a222a7887edc294d",
+    "verification_id": "77d9162e-196b-42d6-b290-63c9380a7e2b",
+    "verification_status": "PASS",
+    "verifier_image_id": "sha256:2f17fc044b579bab302c2e8054d3a686e2cb9a83de48e70534b94cd8ebbe06a9"
+  },
+  "run_id": "bb6c70f5-227b-4c83-a698-3230ea1e5704",
+  "schema_version": 1,
+  "session_lineage": [
+    {
+      "predecessor_session_id": null,
+      "session_id": "sess_0845b6cce5a435d1006ab81e9586d48199a9f2139acd4beb0c"
+    }
+  ],
+  "status": "PASS",
+  "task_key": "PHASE1D-f70d1ad69fda"
+}
