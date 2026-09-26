@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "phase": "1B",
+  "verified_at_utc": "2026-09-26T18:10:10.266538+00:00",
+  "status": "PASS",
+  "source": {
+    "session_id": "sess_0bc7de7fdb27ee0d006ab80385ab7c819bbeb057833aa8aa79",
+    "artifact_id": "artifact_ea210af6c68d411fa36a4c6544b5e928b53b4a181c944983b1",
+    "artifact_sha256": "28ac19606a8ffa3e62833132107110abac1bc33ff621cf1de7926e1d07d30dda"
+  },
+  "base_commit": "7a081367533aa19bcb80d13122e0f3664358a5b8",
+  "candidate_tree_sha256": "27ce9688fd58e3eac336c87293a99be1d5410ca93d76744cb6c3dbd9bfbe64cc",
+  "verifier_image_id": "sha256:2f17fc044b579bab302c2e8054d3a686e2cb9a83de48e70534b94cd8ebbe06a9",
+  "isolation": {
+    "network": "none",
+    "root_filesystem": "read-only",
+    "candidate_mount": "read-only",
+    "trusted_tests_mount": "read-only",
+    "user": "65534:65534",
+    "capabilities": "ALL dropped",
+    "no_new_privileges": true,
+    "memory": "256m",
+    "pids_limit": 64
+  },
+  "checks": [
+    { "name": "trusted_requirement", "exit_code": 0, "summary": "Ran 5 tests; OK" },
+    { "name": "candidate_tests", "exit_code": 0, "summary": "Ran 2 tests; OK" }
+  ],
+  "negative_probe": {
+    "status": "PASS",
+    "tampered_hash_rejected": true,
+    "tampered_artifact_sha256": "96d132bcf382546b1fc55aa2983ef384b94b5468b6a8810e0784abb6e483eb66",
+    "wrong_candidate_tree_sha256": "b96036ceb031593083fd81f13b6c886f68954dec39b0c7135c189de3619f34dd",
+    "trusted_check_exit_code": 1,
+    "candidate_test_exit_code": 0
+  }
+}
