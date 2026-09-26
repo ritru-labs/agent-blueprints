@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "observed_date": "2026-09-26",
+  "sdk": {
+    "package": "openai",
+    "language": "javascript",
+    "version": "7.23.0",
+    "api_beta": "agents=v1"
+  },
+  "session": {
+    "id": "sess_0bc7de7fdb27ee0d006ab80385ab7c819bbeb057833aa8aa79",
+    "root_turn_id": "turn_0bc7de7fdb27ee0d006ab8038d3d50819b922e967c00584325",
+    "root_turn_status": "completed"
+  },
+  "subagent": {
+    "id": "subagent_1e20c651d5c6503b478d500978832b4e",
+    "turn_id": "turn_c6500b5c1b7a1cd61850cbf8c9c9d195",
+    "turn_status": "completed",
+    "assistant_message_item_id": "msg_034377e8893c8411016ab80396e34487d0ad425f5ad09627c4"
+  },
+  "environment": {
+    "type": "openai_hosted",
+    "network_access": "disabled"
+  },
+  "test": {
+    "item_id": "exec_e092bea91b1b5da1a81654593a38d96ebf9c8bb3f04a437625",
+    "exit_code": 0,
+    "passed_tests": 2
+  },
+  "artifact": {
+    "id": "artifact_ea210af6c68d411fa36a4c6544b5e928b53b4a181c944983b1",
+    "turn_id": "turn_0bc7de7fdb27ee0d006ab8038d3d50819b922e967c00584325",
+    "path": "/workspace/outputs/sample-project.zip",
+    "size_bytes": 743,
+    "sha256": "28ac19606a8ffa3e62833132107110abac1bc33ff621cf1de7926e1d07d30dda"
+  }
+}
