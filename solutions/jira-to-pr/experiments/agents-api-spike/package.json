@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "spike": "node run-spike.mjs",
+    "reconcile": "node reconcile-spike.mjs",
     "test": "node --test test/*.test.mjs && python3 -m unittest discover -s test -p 'test_*.py' -v"
   },
   "dependencies": {

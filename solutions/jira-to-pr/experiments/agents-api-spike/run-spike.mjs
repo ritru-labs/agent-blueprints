@@ -1,14 +1,13 @@
 import OpenAI from "openai";
-import { readFile, mkdir, writeFile } from "node:fs/promises";
-import { spawnSync } from "node:child_process";
+import { readFile, mkdir } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { createEventLog, rootTurnOutcome } from "./event-log.mjs";
 import { requireApiKey } from "./config.mjs";
+import { artifactPath, finalizeSpike, saveRun } from "./finalize-spike.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const runDir = path.join(here, ".spike-runs");
-const artifactPath = "/workspace/outputs/sample-project.zip";
 const inputFiles = ["sample/__init__.py", "sample/app.py", "sample/tests/test_app.py"];
 
 async function main() {
@@ -58,33 +57,9 @@ async function main() {
     run.events = state.events;
     run.commands = state.commands;
     if (!run.sessionId || !run.turnId) throw new Error("Completed turn lacked a session or turn ID.");
-    if (state.subagentIds.size < 1 || state.completedSubagentIds.size < 1) {
-      throw new Error("Native subagent creation/completion was not observed.");
-    }
-    if (!state.commands.some((command) => command.command.includes("unittest") && command.exitCode === 0)) {
-      throw new Error("A passing unittest command item was not observed.");
-    }
-    let artifact = null;
-    for await (const candidate of client.beta.agents.sessions.artifacts.list(run.sessionId)) {
-      if (candidate.turn_id === run.turnId && candidate.path === artifactPath) {
-        artifact = candidate;
-        break;
-      }
-    }
-    if (!artifact) throw new Error(`No published artifact at ${artifactPath} for completed turn ${run.turnId}.`);
-    if (artifact.size_bytes > 1_000_000) throw new Error("Published archive exceeds spike size limit.");
-    const response = await client.beta.agents.sessions.artifacts.content(artifact.id, { session_id: run.sessionId });
-    const destination = path.join(runDir, "sample-project.zip");
-    await writeFile(destination, Buffer.from(await response.arrayBuffer()));
-    const validation = spawnSync("python3", [
-      path.join(here, "validate_artifact.py"), destination,
-      path.join(here, "sample-project/sample/app.py"),
-      path.join(here, "sample-project/sample/tests/test_app.py"),
-    ], { encoding: "utf8", shell: false });
-    if (validation.status !== 0) throw new Error(validation.stderr.trim() || "Downloaded artifact failed validation.");
-    run.artifact = { id: artifact.id, path: artifact.path, turnId: artifact.turn_id, ...JSON.parse(validation.stdout) };
-    run.status = "passed";
-    console.log(`[artifact] id=${artifact.id} path=${artifact.path} sha256=${run.artifact.sha256}`);
+    await finalizeSpike(client, run, here);
+    console.log(`[subagent] saved turn=${run.subagentTurns[0].turnId} message=${run.subagentTurns[0].messageItemId}`);
+    console.log(`[artifact] id=${run.artifact.id} path=${run.artifact.path} sha256=${run.artifact.sha256}`);
   } catch (error) {
     run.status = "failed";
     run.error = String(error?.message ?? error).replaceAll(process.env.OPENAI_API_KEY, "[REDACTED]");
@@ -95,7 +70,7 @@ async function main() {
     run.commands = log.state.commands;
     throw error;
   } finally {
-    await writeFile(path.join(runDir, "last-run.json"), JSON.stringify(run, null, 2) + "\n");
+    await saveRun(here, run);
     console.log(`[spike] ${run.status}; sanitized evidence: ${path.join(runDir, "last-run.json")}`);
   }
 }
