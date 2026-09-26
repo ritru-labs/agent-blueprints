@@ -4,6 +4,7 @@ import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { createEventLog, rootTurnOutcome } from "./event-log.mjs";
+import { requireApiKey } from "./config.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const runDir = path.join(here, ".spike-runs");
@@ -11,9 +12,7 @@ const artifactPath = "/workspace/outputs/sample-project.zip";
 const inputFiles = ["sample/__init__.py", "sample/app.py", "sample/tests/test_app.py"];
 
 async function main() {
-  if (!process.env.OPENAI_API_KEY?.trim()) {
-    throw new Error("OPENAI_API_KEY is missing. Set it locally before explicitly running npm run spike.");
-  }
+  requireApiKey(process.env.OPENAI_API_KEY);
   const client = new OpenAI();
   if (typeof client.beta?.agents?.sessions?.create !== "function" ||
       typeof client.beta.agents.sessions.artifacts?.list !== "function" ||
