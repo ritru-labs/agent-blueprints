@@ -1,0 +1,65 @@
+{
+  "distinct_artifacts": true,
+  "environment": "openai_hosted",
+  "feedback_channel": "agent.session.input.message in same session",
+  "feedback_sanitization": "allowlisted finding code and trusted fixed message; raw test output excluded",
+  "first": {
+    "artifact_id": "artifact_25527f04df8a4b81a4a3ebe9d25af30163bc2953d5a7455484",
+    "artifact_path": "/workspace/outputs/sample-project.zip",
+    "artifact_sha256": "e0fde5dac9cc44bd46c9fc22762d57f9d1fe1d087c7b0758fcecf2b90760d5d2",
+    "artifact_size_bytes": 718,
+    "candidate_tree_sha256": "45a5436205a8ad322cdce1aea6e4afbc4b3a7462bc86f48b47fe356a53201e5a",
+    "checks": [
+      {
+        "exit_code": 1,
+        "name": "trusted_requirement",
+        "ok": false,
+        "test_count": 5,
+        "timed_out": false
+      }
+    ],
+    "findings": [
+      {
+        "code": "ADD_ARITHMETIC",
+        "message": "add(a, b) must return the arithmetic sum for positive, zero, and negative integers."
+      }
+    ],
+    "turn_id": "turn_06471642ea8f0181006ab816561ce8819a96fbaaa091c274a4",
+    "verification_status": "FAIL",
+    "verifier_image_id": "sha256:2f17fc044b579bab302c2e8054d3a686e2cb9a83de48e70534b94cd8ebbe06a9"
+  },
+  "initial_fault": "deliberately seeded add(a, b) returns 0",
+  "network": "disabled",
+  "phase": "repair-loop-live-proof",
+  "repaired": {
+    "artifact_id": "artifact_8dd8090c83db4c42a0fa45425fa4ca8b99256fd2dc474f368a",
+    "artifact_path": "/workspace/outputs/sample-project.zip",
+    "artifact_sha256": "62b5bde568d9a21977805e2fc851bbef44bccfe79d8facd41f61b9b4122503a9",
+    "artifact_size_bytes": 875,
+    "candidate_tree_sha256": "23a76b73da69f90654a1ba6a0a958e1519fe609eb87ed8aee6758c6854c6e234",
+    "checks": [
+      {
+        "exit_code": 0,
+        "name": "trusted_requirement",
+        "ok": true,
+        "test_count": 5,
+        "timed_out": false
+      },
+      {
+        "exit_code": 0,
+        "name": "candidate_tests",
+        "ok": true,
+        "test_count": 7,
+        "timed_out": false
+      }
+    ],
+    "findings": [],
+    "turn_id": "turn_06471642ea8f0181006ab816859008819a889df26a246fcac9",
+    "verification_status": "PASS",
+    "verifier_image_id": "sha256:2f17fc044b579bab302c2e8054d3a686e2cb9a83de48e70534b94cd8ebbe06a9"
+  },
+  "same_session": true,
+  "schema_version": 1,
+  "session_id": "sess_06471642ea8f0181006ab8165147a4819aaf006adf99054837",
+  "status": "passed"
+}

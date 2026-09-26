@@ -1,5 +1,6 @@
 node_modules/
 .spike-runs/
+.repair-runs/
 __pycache__/
 *.pyc
 .env
