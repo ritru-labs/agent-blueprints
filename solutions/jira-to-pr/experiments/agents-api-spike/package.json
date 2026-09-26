@@ -1,0 +1,12 @@
+{
+  "name": "jira-to-pr-agents-api-spike",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "spike": "node run-spike.mjs",
+    "test": "node --test test/*.test.mjs && python3 -m unittest discover -s test -p 'test_*.py' -v"
+  },
+  "dependencies": {
+    "openai": "7.23.0"
+  }
+}

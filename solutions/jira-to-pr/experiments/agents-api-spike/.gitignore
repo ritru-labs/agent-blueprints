@@ -1,0 +1,4 @@
+node_modules/
+.spike-runs/
+__pycache__/
+*.pyc
