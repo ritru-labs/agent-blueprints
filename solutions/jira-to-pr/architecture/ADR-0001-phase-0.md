@@ -1,6 +1,6 @@
 # ADR 0001: Jira-to-draft-PR blueprint architecture
 
-- Status: Proposed for review
+- Status: Accepted
 - Date: 2026-09-26
 - Scope: Phase 0 design only; no application or live workflow has been implemented
 
@@ -31,6 +31,8 @@ The application owns task identity, policy, workflow state, credentials, verific
 ### Agent and delegation
 
 Create one session per delivery task and persist its ID beside the ticket ID, repository, base commit, task branch, state, checkpoint artifact, candidate tree hash, verification results, external action IDs, and timestamps. Continue the same session for related repairs while the session is usable. Set `agent.multi_agent.enabled=true` and `max_concurrent_subagents=2` initially. The coordinator decides whether to delegate independent repository analysis, test analysis, or post-change review. Subagents share the same filesystem, so analysis and review are read-only; the coordinator alone edits candidate code. A subagent review is an additional perspective, not an independent security guarantee. [Run and continue sessions](https://developers.openai.com/api/docs/guides/agents-api/sessions), [multi-agent](https://developers.openai.com/api/docs/guides/agents-api/multi-agent).
+
+The Agents API documentation says subagents do not support application-side function tools. Use them primarily for bounded investigation, analysis, testing recommendations, and review. Privileged application functions such as Jira updates, GitHub branch publication, and draft PR creation remain coordinator/trusted-application responsibilities; do not assign them to subagents. [Multi-agent tool availability](https://developers.openai.com/api/docs/guides/agents-api/multi-agent), [function tools](https://developers.openai.com/api/docs/guides/agents-api/tools/functions).
 
 ### Environment and code handoff
 
