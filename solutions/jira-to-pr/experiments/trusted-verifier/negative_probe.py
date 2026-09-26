@@ -37,7 +37,13 @@ def main():
         trusted = run_check(candidate, "trusted_requirement")
         candidate_test = run_check(candidate, "candidate_tests")
 
-    passed = hash_rejected and trusted["exit_code"] != 0 and candidate_test["exit_code"] == 0
+    passed = (
+        hash_rejected and
+        trusted["exit_code"] == 1 and trusted["test_count"] == 5 and
+        trusted["failed_marker"] and not trusted["timed_out"] and
+        candidate_test["exit_code"] == 0 and candidate_test["test_count"] == 1 and
+        candidate_test["ok"] and not candidate_test["timed_out"]
+    )
     result = {
         "schema_version": 1,
         "status": "PASS" if passed else "FAIL",
@@ -45,8 +51,10 @@ def main():
         "tampered_hash_rejected": hash_rejected,
         "wrong_candidate_tree_sha256": tree_hash,
         "trusted_check_exit_code": trusted["exit_code"],
+        "trusted_test_count": trusted["test_count"],
         "trusted_check_summary": trusted["summary"],
         "candidate_test_exit_code": candidate_test["exit_code"],
+        "candidate_test_count": candidate_test["test_count"],
         "candidate_test_summary": candidate_test["summary"],
     }
     output = HERE / ".verifier-runs/negative-result.json"

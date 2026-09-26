@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "phase": "1B",
-  "verified_at_utc": "2026-09-26T18:10:10.266538+00:00",
+  "verified_at_utc": "2026-09-26T18:17:36.249516+00:00",
   "status": "PASS",
   "source": {
     "session_id": "sess_0bc7de7fdb27ee0d006ab80385ab7c819bbeb057833aa8aa79",
@@ -23,8 +23,8 @@
     "pids_limit": 64
   },
   "checks": [
-    { "name": "trusted_requirement", "exit_code": 0, "summary": "Ran 5 tests; OK" },
-    { "name": "candidate_tests", "exit_code": 0, "summary": "Ran 2 tests; OK" }
+    { "name": "trusted_requirement", "exit_code": 0, "test_count": 5, "summary": "Ran 5 tests; OK" },
+    { "name": "candidate_tests", "exit_code": 0, "test_count": 2, "summary": "Ran 2 tests; OK" }
   ],
   "negative_probe": {
     "status": "PASS",
@@ -32,6 +32,8 @@
     "tampered_artifact_sha256": "96d132bcf382546b1fc55aa2983ef384b94b5468b6a8810e0784abb6e483eb66",
     "wrong_candidate_tree_sha256": "b96036ceb031593083fd81f13b6c886f68954dec39b0c7135c189de3619f34dd",
     "trusted_check_exit_code": 1,
-    "candidate_test_exit_code": 0
+    "trusted_test_count": 5,
+    "candidate_test_exit_code": 0,
+    "candidate_test_count": 1
   }
 }

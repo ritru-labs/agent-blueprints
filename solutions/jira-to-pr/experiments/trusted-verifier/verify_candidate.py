@@ -91,10 +91,13 @@ def run_check(candidate_dir, check_name):
     else:
         output = head[: MAX_OUTPUT // 2].decode("utf-8", "replace") + "\n...[truncated]...\n" + tail.decode("utf-8", "replace")
     match = re.search(r"Ran (\d+) tests?", output)
+    test_count = int(match.group(1)) if match else None
+    ok = bool(re.search(r"^OK$", output, re.MULTILINE))
+    failed_marker = bool(re.search(r"^FAILED", output, re.MULTILINE))
     summary = f"Ran {match.group(1)} {'test' if match.group(1) == '1' else 'tests'}" if match else "No test count observed"
-    if re.search(r"^OK$", output, re.MULTILINE):
+    if ok:
         summary += "; OK"
-    elif re.search(r"^FAILED", output, re.MULTILINE):
+    elif failed_marker:
         summary += "; FAILED"
     if timed_out:
         summary += "; timed out"
@@ -102,10 +105,21 @@ def run_check(candidate_dir, check_name):
         "name": check_name,
         "command": f"python3 -B -m unittest discover -s {('/checks' if check_name == 'trusted_requirement' else '/workspace/sample/tests')} -p test_*.py -v",
         "exit_code": exit_code,
+        "test_count": test_count,
+        "ok": ok,
+        "failed_marker": failed_marker,
+        "timed_out": timed_out,
         "duration_ms": round((time.monotonic() - started) * 1000),
         "summary": summary,
         "output_excerpt": output,
     }
+
+
+def check_passed(result, minimum_tests, exact_tests=None):
+    count = result.get("test_count")
+    return (result.get("exit_code") == 0 and isinstance(count, int) and
+            count >= minimum_tests and (exact_tests is None or count == exact_tests) and
+            result.get("ok") is True and result.get("timed_out") is False)
 
 
 def verify(artifact_path, expected_sha256):
@@ -116,8 +130,10 @@ def verify(artifact_path, expected_sha256):
         candidate_dir = pathlib.Path(temporary)
         tree_hash, manifest = materialize_candidate(candidate_dir, baseline, accepted)
         checks = [run_check(candidate_dir, "trusted_requirement")]
-        if checks[0]["exit_code"] == 0:
+        trusted_ok = check_passed(checks[0], minimum_tests=5, exact_tests=5)
+        if trusted_ok:
             checks.append(run_check(candidate_dir, "candidate_tests"))
+    candidate_ok = len(checks) == 2 and check_passed(checks[1], minimum_tests=1)
     return {
         "artifact_sha256": digest,
         "base_commit": BASE_COMMIT,
@@ -131,7 +147,7 @@ def verify(artifact_path, expected_sha256):
             "no_new_privileges": True, "memory": "256m", "pids_limit": 64,
         },
         "checks": checks,
-        "status": "PASS" if len(checks) == 2 and all(c["exit_code"] == 0 for c in checks) else "FAIL",
+        "status": "PASS" if trusted_ok and candidate_ok else "FAIL",
     }
 
 

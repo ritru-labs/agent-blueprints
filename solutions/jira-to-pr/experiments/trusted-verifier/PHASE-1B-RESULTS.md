@@ -13,11 +13,11 @@
 
 ## Independent execution
 
-- Run at 2026-09-26 18:10 UTC with local Python 3.9.6 and Docker Engine 29.8.0. Verifier image pinned to `sha256:2f17fc044b579bab302c2e8054d3a686e2cb9a83de48e70534b94cd8ebbe06a9`; `--pull=never` prevented a surprise image fetch.
+- Run at 2026-09-26 18:17 UTC with local Python 3.9.6 and Docker Engine 29.8.0. Verifier image pinned to `sha256:2f17fc044b579bab302c2e8054d3a686e2cb9a83de48e70534b94cd8ebbe06a9`; `--pull=never` prevented a surprise image fetch.
 - Docker used `--network none`, a read-only root filesystem and bind mounts, user `65534:65534`, all capabilities dropped, no new privileges, a 64-process limit, 256 MiB memory limit, 1 CPU, and a 60-second host timeout. The verifier did not mount the repository, `.env.local`, or Docker socket into the candidate container.
 - Verifier-owned tests, mounted from outside the ZIP: **5 passed**. They checked `add` cases, preserved `identity`, absence of application token names, inability to write to the candidate path, and lack of outbound networking.
 - Candidate-authored tests, run separately after trusted checks: **2 passed**. Both Docker command exit codes were `0`.
-- Offline intake tests: **5 passed**. These cover exact-file reconstruction, hash mismatch, traversal, special-file rejection, and unchanged source.
+- Offline intake and gate tests: **7 passed**. These cover exact-file reconstruction, hash mismatch, traversal, special-file rejection, unchanged source, and rejection of a successful command that discovered zero tests. The live pass gate requires exactly 5 verifier-owned tests, at least 1 candidate test, an `OK` marker, exit code `0`, and no timeout.
 
 ## Failure checks
 

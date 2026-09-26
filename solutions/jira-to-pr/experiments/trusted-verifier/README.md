@@ -19,4 +19,6 @@ Each container uses a pinned image, no network, a read-only root filesystem, rea
 
 The verifier-owned tests check `add` across positive, zero, and negative cases; preserve `identity`; assert that application token names are absent; and check that writing to the candidate path and outbound networking fail. Candidate-authored tests are run only after the trusted checks pass. This is a narrow synthetic proof, not a general secure executor for arbitrary repositories. Docker isolation and the current three-file allowlist must be reviewed before expanding scope.
 
+The pass gate requires all 5 verifier-owned tests, at least 1 candidate test, an `OK` result, exit code `0`, and no timeout. A successful command that discovers zero tests fails verification.
+
 `negative_probe.py` is an explicit second container exercise: a changed artifact must fail the trusted SHA-256 gate, and a wrong `add` implementation with a candidate-authored passing test must still fail verifier-owned checks. It writes only sanitized metadata to ignored `.verifier-runs/negative-result.json`.
