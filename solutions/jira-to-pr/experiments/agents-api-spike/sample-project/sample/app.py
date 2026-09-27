@@ -1,5 +1,9 @@
-"""A tiny module intentionally missing the requested add function."""
+"""Tiny arithmetic and identity helpers."""
 
 
 def identity(value):
     return value
+
+
+def add(a, b):
+    return a + b
