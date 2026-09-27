@@ -31,6 +31,21 @@ class FakeGitHub:
     def list_pulls(self, base_ref, head_ref):
         return list(self._read()["pulls"])
 
+    def pull(self, number):
+        for pull in self._read()["pulls"]:
+            if pull["number"] == number:
+                return pull
+        return None
+
+    def check_runs(self, head_sha):
+        return list(self._read().get("check_runs", {}).get(head_sha, []))
+
+    def pull_reviews(self, number):
+        return list(self._read().get("reviews", {}).get(str(number), []))
+
+    def pull_review_comments(self, number):
+        return list(self._read().get("review_comments", {}).get(str(number), []))
+
     def create_draft_pull(self, *, title, body, base_ref, head_ref):
         state = self._read()
         number = len(state["pulls"]) + 1
@@ -40,6 +55,7 @@ class FakeGitHub:
             "title": title, "body": body, "draft": True, "state": "open",
             "user": {"login": state["actor_login"]},
             "base": {"ref": base_ref.removeprefix("refs/heads/"),
+                     "sha": state["refs"].get(base_ref),
                      "repo": {"full_name": REPOSITORY}},
             "head": {"ref": head_ref.removeprefix("refs/heads/"),
                      "sha": state["refs"][head_ref],

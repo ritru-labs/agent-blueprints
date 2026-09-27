@@ -43,7 +43,13 @@ class Store:
                     versions = [1, 2, 3]
                 if versions == [1, 2, 3]:
                     cur.execute((HERE / "schema_v4.sql").read_text(), prepare=False)
-                elif versions != [1, 2, 3, 4]:
+                    versions = [1, 2, 3, 4]
+                if versions == [1, 2, 3, 4]:
+                    cur.execute((HERE / "schema_v5.sql").read_text(), prepare=False)
+                    versions = [1, 2, 3, 4, 5]
+                if versions == [1, 2, 3, 4, 5]:
+                    cur.execute((HERE / "schema_v6.sql").read_text(), prepare=False)
+                elif versions != [1, 2, 3, 4, 5, 6]:
                     raise RuntimeError("unsupported control-plane schema version")
 
     @contextmanager
@@ -116,13 +122,25 @@ class Store:
                                                                archive_sha, tree_sha, base_commit,
                                                                storage_name):
                 return candidate
-            if run["state"] not in ("RECEIVED", "AWAITING_REPAIR_CANDIDATE"):
+            ci_repair = None
+            if run["state"] == "VERIFIED":
+                ci_repair = conn.execute(
+                    "SELECT * FROM ci_repair_intents WHERE run_id = %s "
+                    "ORDER BY created_at DESC, id DESC LIMIT 1", (run_id,)
+                ).fetchone()
+            if run["state"] not in ("RECEIVED", "AWAITING_REPAIR_CANDIDATE", "VERIFIED"):
                 raise ValueError("run cannot accept a candidate in its current state")
+            if run["state"] == "VERIFIED" and (
+                    ci_repair is None or ci_repair["status"] != "OBSERVED" or
+                    ci_repair["failed_candidate_id"] != run["candidate_id"] or
+                    ci_repair["failed_verification_id"] != run["verification_id"] or
+                    ci_repair["result_turn_id"] != turn_id):
+                raise ValueError("new candidate lacks a reconciled CI repair turn")
             if session_id != run["current_session_id"] or not turn_id:
                 raise ValueError("candidate session or saved turn differs from current lineage")
             ordinal = 1 if candidate is None else candidate["ordinal"] + 1
             attempt = None
-            if ordinal > 1:
+            if ordinal > 1 and ci_repair is None:
                 attempt = conn.execute(
                     "SELECT * FROM repair_attempts WHERE run_id = %s AND ordinal = %s",
                     (run_id, ordinal - 1),
@@ -135,9 +153,11 @@ class Store:
             candidate = conn.execute(
                 "INSERT INTO candidate_artifacts(id, run_id, source_artifact_id, archive_sha256, "
                 "tree_sha256, base_commit, storage_path, ordinal, source_session_id, source_turn_id, "
-                "repair_attempt_id) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING *",
+                "repair_attempt_id, ci_repair_id) "
+                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING *",
                 (candidate_id, run_id, artifact_id, archive_sha, tree_sha, base_commit, storage_name,
-                 ordinal, session_id, turn_id, attempt["id"] if attempt else None),
+                 ordinal, session_id, turn_id, attempt["id"] if attempt else None,
+                 ci_repair["id"] if ci_repair else None),
             ).fetchone()
             conn.execute("UPDATE workflow_runs SET state = 'CANDIDATE_READY', candidate_id = %s, "
                          "verification_id = NULL "
@@ -197,8 +217,10 @@ class Store:
             else:
                 policy = conn.execute("SELECT document FROM policy_snapshots WHERE policy_hash = %s",
                                       (run["policy_hash"],)).fetchone()["document"]
-                used = conn.execute("SELECT count(*) AS n FROM repair_attempts WHERE run_id = %s",
-                                    (run_id,)).fetchone()["n"]
+                used = conn.execute(
+                    "SELECT (SELECT count(*) FROM repair_attempts WHERE run_id = %s) + "
+                    "(SELECT count(*) FROM ci_repair_intents WHERE run_id = %s) AS n",
+                    (run_id, run_id)).fetchone()["n"]
                 repairable = evidence.get("findings") == [{
                     "code": "ADD_ARITHMETIC",
                     "message": "add(a, b) must return the arithmetic sum for positive, zero, and negative integers.",
@@ -349,8 +371,9 @@ class Store:
 
     def get_publication(self, run_id):
         with self.connect() as conn:
-            return conn.execute("SELECT * FROM publication_attempts WHERE run_id = %s",
-                                (run_id,)).fetchone()
+            return conn.execute("SELECT * FROM publication_attempts WHERE run_id = %s AND "
+                                "candidate_id = (SELECT candidate_id FROM workflow_runs WHERE id = %s)",
+                                (run_id, run_id)).fetchone()
 
     def plan_publication(self, run_id, intent):
         fields = ("candidate_id", "verification_id", "archive_sha256",
@@ -368,12 +391,12 @@ class Store:
                 "commit_sha, branch_ref, remote_id, publisher_policy_hash, operation_key, "
                 "remote_kind) "
                 "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) "
-                "ON CONFLICT (run_id) DO NOTHING RETURNING *",
+                "ON CONFLICT (run_id, candidate_id) DO NOTHING RETURNING *",
                 (uuid.uuid4(), run_id, *(intent[field] for field in fields)),
             ).fetchone()
             saved = inserted or conn.execute(
-                "SELECT * FROM publication_attempts WHERE run_id = %s FOR UPDATE",
-                (run_id,),
+                "SELECT * FROM publication_attempts WHERE run_id = %s AND candidate_id = %s FOR UPDATE",
+                (run_id, intent["candidate_id"]),
             ).fetchone()
             if any(str(saved[field]) != str(intent[field]) for field in fields):
                 raise ValueError("stored publication intent differs from exact candidate or policy")
@@ -382,8 +405,9 @@ class Store:
     def mark_publication_unknown(self, run_id):
         with self.connect() as conn:
             conn.execute("SELECT id FROM workflow_runs WHERE id = %s FOR UPDATE", (run_id,))
-            row = conn.execute("SELECT * FROM publication_attempts WHERE run_id = %s FOR UPDATE",
-                               (run_id,)).fetchone()
+            row = conn.execute("SELECT * FROM publication_attempts WHERE run_id = %s AND "
+                               "candidate_id = (SELECT candidate_id FROM workflow_runs WHERE id = %s) "
+                               "FOR UPDATE", (run_id, run_id)).fetchone()
             if row is None:
                 raise ValueError("publication intent is missing")
             if row["state"] == "OUTCOME_UNKNOWN":
@@ -396,8 +420,9 @@ class Store:
     def confirm_publication(self, run_id):
         with self.connect() as conn:
             conn.execute("SELECT id FROM workflow_runs WHERE id = %s FOR UPDATE", (run_id,))
-            row = conn.execute("SELECT * FROM publication_attempts WHERE run_id = %s FOR UPDATE",
-                               (run_id,)).fetchone()
+            row = conn.execute("SELECT * FROM publication_attempts WHERE run_id = %s AND "
+                               "candidate_id = (SELECT candidate_id FROM workflow_runs WHERE id = %s) "
+                               "FOR UPDATE", (run_id, run_id)).fetchone()
             if row is None:
                 raise ValueError("publication intent is missing")
             if row["state"] == "CONFIRMED":
@@ -488,7 +513,7 @@ class Store:
             ).fetchone()
             publication = conn.execute(
                 "SELECT state, branch_ref, commit_sha, git_tree_sha FROM publication_attempts "
-                "WHERE run_id = %s", (run["id"],),
+                "WHERE run_id = %s AND candidate_id = %s", (run["id"], run["candidate_id"]),
             ).fetchone()
             draft = conn.execute(
                 "SELECT state, pr_number, pr_url FROM draft_pr_attempts WHERE run_id = %s",
@@ -542,3 +567,235 @@ class Store:
         return {"run": self.summary(task_key), "sessions": clean(sessions),
                 "candidates": clean(candidates), "verifications": clean(verifications),
                 "repairs": clean(repairs)}
+
+    def pin_observation_policy(self, run_id, policy):
+        with self.connect() as conn:
+            conn.execute("SELECT id FROM workflow_runs WHERE id = %s FOR UPDATE", (run_id,))
+            conn.execute("INSERT INTO pr_observation_policies(run_id, policy_sha256, document) "
+                         "VALUES (%s, %s, %s) ON CONFLICT (run_id) DO NOTHING",
+                         (run_id, policy.sha256, Jsonb(policy.document)))
+            saved = conn.execute("SELECT * FROM pr_observation_policies WHERE run_id = %s",
+                                 (run_id,)).fetchone()
+            if saved["policy_sha256"] != policy.sha256 or saved["document"] != policy.document:
+                raise ValueError("Phase 1F observation policy drift")
+            return saved
+
+    def seed_pr_head(self, run, draft, publication):
+        with self.connect() as conn:
+            conn.execute("SELECT id FROM workflow_runs WHERE id = %s FOR UPDATE", (run["id"],))
+            existing = conn.execute("SELECT * FROM pr_head_links WHERE run_id = %s "
+                                    "ORDER BY ordinal DESC LIMIT 1", (run["id"],)).fetchone()
+            if existing:
+                return existing
+            if (draft["run_id"] != run["id"] or draft["publication_id"] != publication["id"] or
+                    draft["head_commit_sha"] != publication["commit_sha"] or
+                    publication["candidate_id"] != run["candidate_id"] or
+                    publication["verification_id"] != run["verification_id"]):
+                raise ValueError("initial PR head does not match current verified publication")
+            return conn.execute(
+                "INSERT INTO pr_head_links(id, run_id, draft_pr_id, publication_id, "
+                "candidate_id, verification_id, head_commit_sha, ordinal) "
+                "VALUES (%s, %s, %s, %s, %s, %s, %s, 1) RETURNING *",
+                (uuid.uuid4(), run["id"], draft["id"], publication["id"],
+                 run["candidate_id"], run["verification_id"], publication["commit_sha"]),
+            ).fetchone()
+
+    def save_pr_observation(self, head, policy, payload_sha, gate, findings, checks, reviews,
+                            comments=()):
+        with self.connect() as conn:
+            run = conn.execute("SELECT * FROM workflow_runs WHERE id = %s FOR UPDATE",
+                               (head["run_id"],)).fetchone()
+            latest = conn.execute("SELECT * FROM pr_head_links WHERE run_id = %s "
+                                  "ORDER BY ordinal DESC LIMIT 1", (head["run_id"],)).fetchone()
+            if (run["state"] != "VERIFIED" or latest["id"] != head["id"] or
+                    run["candidate_id"] != head["candidate_id"] or
+                    run["verification_id"] != head["verification_id"]):
+                raise ValueError("CI/review observation targets a stale candidate or PR head")
+            pinned = conn.execute("SELECT * FROM pr_observation_policies WHERE run_id = %s",
+                                  (run["id"],)).fetchone()
+            if pinned["policy_sha256"] != policy.sha256:
+                raise ValueError("CI/review observation policy drift")
+            batch = conn.execute(
+                "INSERT INTO pr_observation_batches(id, head_link_id, run_id, candidate_id, "
+                "verification_id, publication_id, draft_pr_id, head_commit_sha, "
+                "policy_sha256, payload_sha256, gate, findings) "
+                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) "
+                "ON CONFLICT (head_link_id, payload_sha256) DO NOTHING RETURNING *",
+                (uuid.uuid4(), head["id"], head["run_id"], head["candidate_id"],
+                 head["verification_id"], head["publication_id"], head["draft_pr_id"],
+                 head["head_commit_sha"], policy.sha256, payload_sha, gate, Jsonb(findings)),
+            ).fetchone()
+            if batch is None:
+                batch = conn.execute("SELECT * FROM pr_observation_batches WHERE "
+                                     "head_link_id = %s AND payload_sha256 = %s",
+                                     (head["id"], payload_sha)).fetchone()
+                if batch["gate"] != gate or batch["findings"] != findings:
+                    raise ValueError("observation digest collided with different findings")
+                return batch
+            for check in checks:
+                conn.execute(
+                    "INSERT INTO pr_check_observations(id, batch_id, check_name, app_slug, check_id, "
+                    "run_attempt, check_suite_id, head_commit_sha, status, conclusion, "
+                    "started_at, completed_at) "
+                    "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
+                    (uuid.uuid4(), batch["id"], check["check_name"], check["app_slug"],
+                     check["check_id"],
+                     check["run_attempt"], check["check_suite_id"], check["head_commit_sha"],
+                     check["status"], check["conclusion"], check["started_at"],
+                     check["completed_at"]),
+                )
+            for review in reviews:
+                conn.execute(
+                    "INSERT INTO pr_review_observations(id, batch_id, review_id, reviewer, "
+                    "review_head_sha, state, finding_code, body_sha256, submitted_at) "
+                    "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)",
+                    (uuid.uuid4(), batch["id"], review["review_id"], review["reviewer"],
+                     review["review_head_sha"], review["state"], review["finding_code"],
+                     review["body_sha256"], review["submitted_at"]),
+                )
+            for comment in comments:
+                conn.execute(
+                    "INSERT INTO pr_review_comment_observations(id, batch_id, comment_id, reviewer, "
+                    "review_head_sha, finding_code, body_sha256, created_at) "
+                    "VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
+                    (uuid.uuid4(), batch["id"], comment["comment_id"], comment["reviewer"],
+                     comment["review_head_sha"], comment["finding_code"],
+                     comment["body_sha256"], comment["created_at"]),
+                )
+            return batch
+
+    def latest_pr_observation(self, run_id):
+        with self.connect() as conn:
+            return conn.execute(
+                "SELECT b.* FROM pr_observation_batches b JOIN pr_head_links h "
+                "ON h.id = b.head_link_id WHERE h.run_id = %s AND h.ordinal = "
+                "(SELECT max(ordinal) FROM pr_head_links WHERE run_id = %s) "
+                "ORDER BY b.observed_at DESC, b.id DESC LIMIT 1", (run_id, run_id),
+            ).fetchone()
+
+    def get_pr_observation(self, observation_id):
+        with self.connect() as conn:
+            return conn.execute("SELECT * FROM pr_observation_batches WHERE id = %s",
+                                (observation_id,)).fetchone()
+
+    def latest_pr_head(self, run_id):
+        with self.connect() as conn:
+            return conn.execute("SELECT * FROM pr_head_links WHERE run_id = %s "
+                                "ORDER BY ordinal DESC LIMIT 1", (run_id,)).fetchone()
+
+    def previous_pr_head(self, run_id, ordinal):
+        with self.connect() as conn:
+            return conn.execute("SELECT * FROM pr_head_links WHERE run_id = %s AND ordinal = %s",
+                                (run_id, ordinal - 1)).fetchone()
+
+    def link_republication(self, run_id, publication_id):
+        with self.connect() as conn:
+            run = conn.execute("SELECT * FROM workflow_runs WHERE id = %s FOR UPDATE",
+                               (run_id,)).fetchone()
+            publication = conn.execute("SELECT * FROM publication_attempts WHERE id = %s",
+                                       (publication_id,)).fetchone()
+            draft = conn.execute("SELECT * FROM draft_pr_attempts WHERE run_id = %s",
+                                 (run_id,)).fetchone()
+            prior = conn.execute("SELECT * FROM pr_head_links WHERE run_id = %s "
+                                 "ORDER BY ordinal DESC LIMIT 1", (run_id,)).fetchone()
+            candidate = self.get_candidate_for_connection(conn, run)
+            if (run["state"] != "VERIFIED" or publication is None or draft is None or prior is None or
+                    publication["state"] != "CONFIRMED" or draft["state"] != "CONFIRMED" or
+                    publication["candidate_id"] != run["candidate_id"] or
+                    publication["verification_id"] != run["verification_id"] or
+                    publication["branch_ref"] != draft["head_ref"]):
+                raise ValueError("republication lacks the current exact verified draft identity")
+            if prior["publication_id"] == publication_id:
+                return prior
+            ci = conn.execute("SELECT * FROM ci_repair_intents WHERE id = %s",
+                              (candidate["ci_repair_id"],)).fetchone()
+            if (ci is None or ci["status"] != "OBSERVED" or
+                    ci["head_link_id"] != prior["id"] or
+                    ci["failed_candidate_id"] != prior["candidate_id"] or
+                    ci["failed_verification_id"] != prior["verification_id"]):
+                raise ValueError("republication lacks the observed CI repair lineage")
+            return conn.execute(
+                "INSERT INTO pr_head_links(id, run_id, draft_pr_id, publication_id, "
+                "candidate_id, verification_id, head_commit_sha, ordinal) "
+                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s) RETURNING *",
+                (uuid.uuid4(), run_id, draft["id"], publication_id, run["candidate_id"],
+                 run["verification_id"], publication["commit_sha"], prior["ordinal"] + 1),
+            ).fetchone()
+
+    def repair_count(self, run_id):
+        with self.connect() as conn:
+            return conn.execute(
+                "SELECT (SELECT count(*) FROM repair_attempts WHERE run_id = %s) + "
+                "(SELECT count(*) FROM ci_repair_intents WHERE run_id = %s) AS n",
+                (run_id, run_id)).fetchone()["n"]
+
+    def current_ci_repair(self, run_id):
+        with self.connect() as conn:
+            return conn.execute("SELECT * FROM ci_repair_intents WHERE run_id = %s "
+                                "ORDER BY created_at DESC, id DESC LIMIT 1", (run_id,)).fetchone()
+
+    def plan_ci_repair(self, run_id, observation_id, input_key, input_sha256):
+        with self.connect() as conn:
+            run = conn.execute("SELECT * FROM workflow_runs WHERE id = %s FOR UPDATE",
+                               (run_id,)).fetchone()
+            observation = conn.execute("SELECT * FROM pr_observation_batches WHERE id = %s",
+                                       (observation_id,)).fetchone()
+            if run is None or observation is None or observation["run_id"] != run_id:
+                raise ValueError("CI repair observation is absent")
+            existing = conn.execute("SELECT * FROM ci_repair_intents WHERE "
+                                    "head_link_id = %s FOR UPDATE",
+                                    (observation["head_link_id"],)).fetchone()
+            if existing:
+                if (existing["observation_id"], existing["input_key"], existing["input_sha256"]) != (
+                        observation_id, input_key, input_sha256):
+                    raise ValueError("stored CI repair intent differs from deterministic input")
+                return existing
+            return conn.execute(
+                "INSERT INTO ci_repair_intents(id, run_id, head_link_id, observation_id, "
+                "failed_candidate_id, failed_verification_id, session_id, input_key, input_sha256) "
+                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING *",
+                (uuid.uuid4(), run_id, observation["head_link_id"], observation_id,
+                 run["candidate_id"], run["verification_id"], run["current_session_id"],
+                 input_key, input_sha256),
+            ).fetchone()
+
+    def mark_ci_repair_uncertain(self, run_id):
+        with self.connect() as conn:
+            run = conn.execute("SELECT * FROM workflow_runs WHERE id = %s FOR UPDATE",
+                               (run_id,)).fetchone()
+            row = conn.execute("SELECT * FROM ci_repair_intents WHERE run_id = %s "
+                               "ORDER BY created_at DESC, id DESC LIMIT 1 FOR UPDATE",
+                               (run_id,)).fetchone()
+            if (row is None or run["candidate_id"] != row["failed_candidate_id"] or
+                    run["verification_id"] != row["failed_verification_id"] or
+                    run["state"] != "VERIFIED"):
+                raise ValueError("CI repair input is not current")
+            if row["status"] == "UNCERTAIN":
+                return row
+            if row["status"] != "PLANNED":
+                raise ValueError("CI repair input cannot be submitted twice")
+            return conn.execute("UPDATE ci_repair_intents SET status = 'UNCERTAIN' "
+                                "WHERE id = %s RETURNING *", (row["id"],)).fetchone()
+
+    def observe_ci_repair(self, run_id, session_id, input_sha256, message_item_id, result_turn_id):
+        with self.connect() as conn:
+            run = conn.execute("SELECT * FROM workflow_runs WHERE id = %s FOR UPDATE",
+                               (run_id,)).fetchone()
+            row = conn.execute("SELECT * FROM ci_repair_intents WHERE run_id = %s "
+                               "ORDER BY created_at DESC, id DESC LIMIT 1 FOR UPDATE",
+                               (run_id,)).fetchone()
+            if (row is None or run["candidate_id"] != row["failed_candidate_id"] or
+                    run["verification_id"] != row["failed_verification_id"] or
+                    row["session_id"] != session_id or row["input_sha256"] != input_sha256 or
+                    not message_item_id or not result_turn_id):
+                raise ValueError("saved CI repair message differs from durable intent")
+            if row["status"] == "OBSERVED":
+                if (row["message_item_id"], row["result_turn_id"]) != (message_item_id, result_turn_id):
+                    raise ValueError("conflicting saved CI repair turn")
+                return row
+            if row["status"] != "UNCERTAIN":
+                raise ValueError("CI repair input must be uncertain before reconciliation")
+            return conn.execute("UPDATE ci_repair_intents SET status = 'OBSERVED', "
+                                "message_item_id = %s, result_turn_id = %s "
+                                "WHERE id = %s RETURNING *",
+                                (message_item_id, result_turn_id, row["id"])).fetchone()

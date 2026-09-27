@@ -26,14 +26,15 @@ export function repairSubmissionDecision(state, savedMessageFound) {
   throw new Error("repair submission decision requires a durable repair state");
 }
 
-function controlCall(command, args = []) {
+export function controlCall(command, args = []) {
   const environment = {};
   for (const name of ["PATH", "HOME", "DOCKER_HOST", "DOCKER_CONFIG",
                        "PHASE1C_DATABASE_URL", "TMPDIR"]) {
     if (process.env[name]) environment[name] = process.env[name];
   }
   const result = spawnSync(python, [path.join(control, "repair_cli.py"),
-    "--store-dir", storeDir, command, ...args], {
+    "--store-dir", storeDir, "--policy", process.env.PHASE1D_POLICY_PATH ?? path.join(control, "policy.json"),
+    command, ...args], {
     cwd: control, env: environment, shell: false, encoding: "utf8", timeout: 180_000,
     maxBuffer: 1_000_000,
   });
@@ -43,7 +44,7 @@ function controlCall(command, args = []) {
   return JSON.parse(result.stdout);
 }
 
-async function completedInitialTurn(stream, task) {
+export async function completedInitialTurn(stream, task) {
   let sessionId = null;
   let turnId = null;
   try {
@@ -67,7 +68,7 @@ async function completedInitialTurn(stream, task) {
   return { sessionId, turnId };
 }
 
-async function downloadedArtifact(client, sessionId, turnId) {
+export async function downloadedArtifact(client, sessionId, turnId) {
   const turn = await client.beta.agents.sessions.turns.retrieve(turnId, { session_id: sessionId });
   if (turn.status !== "completed" || turn.subagent_id !== null || turn.session_id !== sessionId) {
     throw new Error("saved root turn is not complete in the expected session");
@@ -97,13 +98,13 @@ async function downloadedArtifact(client, sessionId, turnId) {
   return { sessionId, turnId, artifactId: artifact.id, sha256: digest, localPath };
 }
 
-function admit(task, candidate) {
+export function admit(task, candidate) {
   return controlCall("admit", ["--task", task, "--session-id", candidate.sessionId,
     "--turn-id", candidate.turnId, "--artifact-id", candidate.artifactId,
     "--archive-sha256", candidate.sha256, "--archive", candidate.localPath]);
 }
 
-async function savedRepairMessage(client, intent) {
+export async function savedRepairMessage(client, intent) {
   const matches = [];
   for await (const item of client.beta.agents.sessions.items.list(intent.session_id)) {
     if (item.type !== "message" || item.role !== "user" || item.status !== "completed" ||
@@ -117,7 +118,7 @@ async function savedRepairMessage(client, intent) {
   return matches[0] ?? null;
 }
 
-async function waitForSavedRepair(client, intent) {
+export async function waitForSavedRepair(client, intent) {
   for (let count = 0; count < 12; count++) {
     const saved = await savedRepairMessage(client, intent);
     if (saved) return saved;
@@ -126,7 +127,7 @@ async function waitForSavedRepair(client, intent) {
   throw new Error("repair submission outcome remains unknown; no resend is permitted");
 }
 
-async function waitForTurn(client, sessionId, turnId) {
+export async function waitForTurn(client, sessionId, turnId) {
   for (let count = 0; count < 60; count++) {
     const turn = await client.beta.agents.sessions.turns.retrieve(turnId, { session_id: sessionId });
     if (turn.status === "completed") return;

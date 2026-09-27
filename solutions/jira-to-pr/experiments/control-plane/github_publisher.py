@@ -76,3 +76,22 @@ class GitHubPublisher(LocalBarePublisher):
             raise PublicationError("GitHub branch differs from the immutable publication intent")
         if self.github.commit_tree_sha(intent["commit_sha"]) != intent["git_tree_sha"]:
             raise PublicationError("GitHub commit tree differs from the verified publication tree")
+
+    def _assert_pr_head(self, run_id, expected_sha):
+        draft = self.database.get_draft_pr(run_id)
+        if draft is None or draft["state"] != "CONFIRMED":
+            raise PublicationError("existing confirmed draft PR is absent")
+        pull = self.github.pull(draft["pr_number"])
+        if not isinstance(pull, dict):
+            raise PublicationError("existing draft PR could not be read")
+        head = (pull or {}).get("head") or {}
+        base = (pull or {}).get("base") or {}
+        if (pull.get("number") != draft["pr_number"] or pull.get("state") != "open" or
+                pull.get("draft") is not True or
+                (pull.get("user") or {}).get("login") != draft["actor_login"] or
+                head.get("sha") != expected_sha or
+                head.get("ref") != draft["head_ref"].removeprefix("refs/heads/") or
+                (head.get("repo") or {}).get("full_name") != REPOSITORY or
+                base.get("ref") != draft["base_ref"].removeprefix("refs/heads/") or
+                (base.get("repo") or {}).get("full_name") != REPOSITORY):
+            raise PublicationError("existing draft PR differs from the expected exact head")

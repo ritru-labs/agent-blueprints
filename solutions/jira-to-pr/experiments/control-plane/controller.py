@@ -28,7 +28,12 @@ class Controller:
             self.database.assert_policy(run, self.policy)
             if incoming.session_id != run["current_session_id"]:
                 raise ValueError("candidate session differs from stored current session")
-            if run["state"] not in ("RECEIVED", "AWAITING_REPAIR_CANDIDATE"):
+            ci_repair = self.database.current_ci_repair(run["id"]) if run["state"] == "VERIFIED" else None
+            ci_candidate = (ci_repair is not None and ci_repair["status"] == "OBSERVED" and
+                            ci_repair["failed_candidate_id"] == run["candidate_id"] and
+                            ci_repair["failed_verification_id"] == run["verification_id"] and
+                            ci_repair["result_turn_id"] == incoming.turn_id)
+            if run["state"] not in ("RECEIVED", "AWAITING_REPAIR_CANDIDATE") and not ci_candidate:
                 candidate = self.database.get_candidate(run)
                 if (candidate is None or candidate["source_turn_id"] != incoming.turn_id or
                         candidate["source_artifact_id"] != incoming.artifact_id or
@@ -44,6 +49,81 @@ class Controller:
                                            incoming.archive_sha256, tree_hash,
                                            self.policy.document["base_commit"], storage_name)
             return self.database.summary(task_key)
+
+    @staticmethod
+    def _ci_repair_message(run, observation):
+        findings = observation["findings"]
+        if observation["gate"] != "FAIL" or not findings:
+            raise ValueError("CI/review observation has no approved repair finding")
+        fragments = []
+        for finding in findings:
+            code = finding.get("code")
+            if code == "REQUIRED_CHECK_FAILED" and finding.get("conclusion") == "failure":
+                name = finding.get("check")
+                if not isinstance(name, str) or len(name) > 120:
+                    raise ValueError("required check identity is not bounded")
+                fragments.append(f"required check {name} failed")
+                repair_code = finding.get("repair_code")
+                if repair_code == "REMOVE_PHASE1F_MARKER":
+                    fragments.append("remove the PHASE1F_REPAIR_REQUIRED marker comment from sample/app.py")
+                elif repair_code is not None:
+                    raise ValueError("CI repair guidance code is not approved")
+            elif code == "ADD_ARITHMETIC":
+                fragments.append("add(a, b) must return the arithmetic sum")
+            else:
+                raise ValueError("CI/review finding is not approved for automatic repair")
+        return (
+            f"Trusted CI/review observation for exact draft PR head {observation['head_commit_sha']} "
+            f"reported: {', '.join(fragments)}. Inspect the synthetic sample project and "
+            "repair only sample/app.py and sample/tests/test_app.py. Run the candidate tests "
+            "from /workspace, then create a fresh /workspace/outputs/sample-project.zip "
+            "containing only sample/__init__.py, sample/app.py, and "
+            "sample/tests/test_app.py. Read back the ZIP listing. This is a new candidate; "
+            "do not claim trusted verification or CI passed."
+        )
+
+    def plan_ci_repair(self, task_key):
+        run = self.database.get_run(task_key)
+        with self.database.worker_lock(run["id"]):
+            run = self.database.get_run(task_key)
+            self.database.assert_policy(run, self.policy)
+            if run["state"] != "VERIFIED":
+                raise ValueError("CI repair requires current VERIFIED candidate")
+            prior = self.database.current_ci_repair(run["id"])
+            if prior is not None and prior["failed_candidate_id"] != run["candidate_id"]:
+                prior = None
+            observation = (self.database.get_pr_observation(prior["observation_id"]) if prior
+                           else self.database.latest_pr_observation(run["id"]))
+            if observation is None or observation["candidate_id"] != run["candidate_id"] or \
+                    observation["verification_id"] != run["verification_id"]:
+                raise ValueError("current candidate has no exact-head CI finding")
+            message = self._ci_repair_message(run, observation)
+            digest = hashlib.sha256(message.encode()).hexdigest()
+            key = hashlib.sha256(
+                f"{run['id']}:{observation['id']}:{run['candidate_id']}:ci-repair".encode()
+            ).hexdigest()
+            if prior is None:
+                used = self.database.repair_count(run["id"])
+                if used >= self.policy.document["max_repair_attempts"]:
+                    self.database.needs_human(run["id"], "CI repair budget exhausted")
+                    raise ValueError("CI repair budget exhausted; human attention required")
+            attempt = self.database.plan_ci_repair(run["id"], observation["id"], key, digest)
+            return {"session_id": attempt["session_id"], "input_key": attempt["input_key"],
+                    "input_sha256": attempt["input_sha256"], "status": attempt["status"],
+                    "message": message}
+
+    def mark_ci_repair_uncertain(self, task_key):
+        run = self.database.get_run(task_key)
+        with self.database.worker_lock(run["id"]):
+            self.database.assert_policy(self.database.get_run(task_key), self.policy)
+            return self.database.mark_ci_repair_uncertain(run["id"])
+
+    def observe_ci_repair(self, task_key, session_id, input_sha256, message_item_id, result_turn_id):
+        run = self.database.get_run(task_key)
+        with self.database.worker_lock(run["id"]):
+            self.database.assert_policy(self.database.get_run(task_key), self.policy)
+            return self.database.observe_ci_repair(run["id"], session_id, input_sha256,
+                                                   message_item_id, result_turn_id)
 
     def _sanitized_verification(self, record, run, candidate):
         required = {

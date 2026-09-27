@@ -32,12 +32,16 @@ def main():
     admit = commands.add_parser("admit")
     for flag in ("task", "session-id", "turn-id", "artifact-id", "archive-sha256", "archive"):
         admit.add_argument(f"--{flag}", required=True)
-    for name in ("verify", "plan", "mark-uncertain", "inspect", "history"):
+    for name in ("verify", "plan", "mark-uncertain", "inspect", "history",
+                 "ci-plan", "ci-mark-uncertain", "ci-status", "ci-observation-status"):
         command = commands.add_parser(name)
         command.add_argument("--task", required=True)
     observe = commands.add_parser("observe")
     for flag in ("task", "session-id", "input-sha256", "message-item-id", "turn-id"):
         observe.add_argument(f"--{flag}", required=True)
+    ci_observe = commands.add_parser("ci-observe")
+    for flag in ("task", "session-id", "input-sha256", "message-item-id", "turn-id"):
+        ci_observe.add_argument(f"--{flag}", required=True)
     replace = commands.add_parser("replace-session")
     for flag in ("task", "predecessor-id", "replacement-id"):
         replace.add_argument(f"--{flag}", required=True)
@@ -64,8 +68,27 @@ def main():
         value = controller.plan_repair(args.task)
     elif args.command == "mark-uncertain":
         value = safe_json(controller.mark_repair_uncertain(args.task))
+    elif args.command == "ci-plan":
+        value = controller.plan_ci_repair(args.task)
+    elif args.command == "ci-mark-uncertain":
+        value = safe_json(controller.mark_ci_repair_uncertain(args.task))
+    elif args.command == "ci-status":
+        run = database.get_run(args.task)
+        attempt = database.current_ci_repair(run["id"])
+        value = safe_json(attempt) if attempt else {"status": "ABSENT"}
+    elif args.command == "ci-observation-status":
+        run = database.get_run(args.task)
+        observation = database.latest_pr_observation(run["id"])
+        value = ({"status": "ABSENT"} if observation is None else
+                 {"status": "OBSERVED", "gate": observation["gate"],
+                  "candidate_id": str(observation["candidate_id"]),
+                  "head_commit_sha": observation["head_commit_sha"]})
     elif args.command == "observe":
         value = safe_json(controller.observe_repair(
+            args.task, args.session_id, args.input_sha256,
+            args.message_item_id, args.turn_id))
+    elif args.command == "ci-observe":
+        value = safe_json(controller.observe_ci_repair(
             args.task, args.session_id, args.input_sha256,
             args.message_item_id, args.turn_id))
     elif args.command == "replace-session":

@@ -94,6 +94,9 @@ class LocalBarePublisher:
     def _preflight(self, run):
         """Transport-specific identity and base-branch checks before any write."""
 
+    def _assert_pr_head(self, run_id, expected_sha):
+        """GitHub transport overrides this for existing draft PR updates."""
+
     def publish(self, task_key, *, interrupt_after_push=False):
         run = self.database.get_run(task_key)
         with self.database.worker_lock(run["id"]):
@@ -107,6 +110,12 @@ class LocalBarePublisher:
             if (candidate is None or verification is None or verification["status"] != "PASS" or
                     verification["candidate_id"] != candidate["id"]):
                 raise PublicationError("current candidate lacks its exact PASS verification")
+            prior_head = self.database.latest_pr_head(run["id"])
+            updating = candidate["ci_repair_id"] is not None
+            if updating and prior_head is not None and prior_head["candidate_id"] == candidate["id"]:
+                prior_head = self.database.previous_pr_head(run["id"], prior_head["ordinal"])
+            if updating and prior_head is None:
+                raise PublicationError("CI repair publication requires the prior draft PR head")
             try:
                 archive = self.artifact_store.checked_path(candidate["archive_sha256"],
                                                            candidate["storage_path"])
@@ -150,8 +159,11 @@ class LocalBarePublisher:
                 }
                 message = (f"Verified synthetic candidate for run {run['id']}\n\n"
                            f"Candidate: {candidate['id']}\nVerification: {verification['id']}\n")
+                parent = prior_head["head_commit_sha"] if updating else base
+                if self._git("--git-dir", str(clone), "cat-file", "-t", parent) != "commit":
+                    raise PublicationError("prior PR head is absent from the publication remote")
                 commit = self._git("--git-dir", str(clone), "-c", "commit.gpgsign=false",
-                                   "commit-tree", git_tree, "-p", base,
+                                   "commit-tree", git_tree, "-p", parent,
                                    input_bytes=message.encode(), env_extra=commit_env)
                 ref = f"refs/heads/agent/{run['id']}"
                 operation_key = hashlib.sha256(
@@ -168,26 +180,42 @@ class LocalBarePublisher:
                 row = self.database.plan_publication(run["id"], intent)
                 if row["state"] == "CONFIRMED":
                     self._check_remote_commit(row)
+                    if updating:
+                        self._assert_pr_head(run["id"], commit)
+                        self.database.link_republication(run["id"], row["id"])
                     return self.database.summary(task_key)
                 head = self._remote_head(ref)
-                if head is not None:
-                    if head != commit:
-                        raise PublicationError("publisher branch points to another commit")
+                if head == commit:
                     if row["state"] != "OUTCOME_UNKNOWN":
                         raise PublicationError("remote branch exists without an uncertain write record")
                     self._check_remote_commit(row)
+                    if updating:
+                        self._assert_pr_head(run["id"], commit)
                     self._preflight(run)
                     self.database.confirm_publication(run["id"])
+                    if updating:
+                        self.database.link_republication(run["id"], row["id"])
                     return self.database.summary(task_key)
+                if updating:
+                    if head != parent:
+                        raise PublicationError("draft PR branch moved from its previous exact head")
+                    self._assert_pr_head(run["id"], parent)
+                elif head is not None:
+                    raise PublicationError("publisher branch points to another commit")
                 if row["state"] == "OUTCOME_UNKNOWN":
                     raise PublicationError("uncertain push has no observed remote ref; do not retry blindly")
                 self.database.mark_publication_unknown(run["id"])
                 self._git("--git-dir", str(clone), "push", "--porcelain",
-                          f"--force-with-lease={ref}:", str(self.remote), f"{commit}:{ref}")
+                          f"--force-with-lease={ref}:{parent if updating else ''}",
+                          str(self.remote), f"{commit}:{ref}")
                 if interrupt_after_push:
                     os._exit(75)
                 self._check_remote_commit(row)
+                if updating:
+                    self._assert_pr_head(run["id"], commit)
                 self.artifact_store.checked_path(candidate["archive_sha256"], candidate["storage_path"])
                 self._preflight(run)
                 self.database.confirm_publication(run["id"])
+                if updating:
+                    self.database.link_republication(run["id"], row["id"])
                 return self.database.summary(task_key)

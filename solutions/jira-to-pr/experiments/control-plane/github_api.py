@@ -1,10 +1,11 @@
 """Narrow trusted GitHub REST client for branch and draft-PR reconciliation."""
 
 import json
-import subprocess
 import urllib.error
 import urllib.parse
 import urllib.request
+
+from credential_provider import GhCliCredentialProvider
 
 REPOSITORY = "ritru-labs/agent-blueprints"
 API_ROOT = "https://api.github.com"
@@ -21,13 +22,14 @@ class _NoRedirect(urllib.request.HTTPRedirectHandler):
 
 
 class GitHubAPI:
-    def __init__(self, token=None):
+    def __init__(self, token=None, *, credential_provider=None):
+        if token is not None and credential_provider is not None:
+            raise ValueError("supply a token or credential provider, not both")
         if token is None:
-            acquired = subprocess.run(["gh", "auth", "token"], capture_output=True,
-                                      text=True, timeout=10, check=False)
-            if acquired.returncode:
-                raise GitHubAPIError("active GitHub CLI account has no usable token")
-            token = acquired.stdout.strip()
+            try:
+                token = (credential_provider or GhCliCredentialProvider()).token()
+            except (OSError, RuntimeError) as error:
+                raise GitHubAPIError("GitHub credential provider failed") from error
         if not token or "\n" in token or "\r" in token:
             raise GitHubAPIError("GitHub token is absent or invalid")
         self._token = token
@@ -109,3 +111,53 @@ class GitHubAPI:
                    "head": head_ref.removeprefix("refs/heads/"),
                    "draft": True, "maintainer_can_modify": False}
         return self._request("POST", f"/repos/{REPOSITORY}/pulls", payload)
+
+    def pull(self, number):
+        if type(number) is not int or number <= 0:
+            raise ValueError("invalid PR number")
+        return self._request("GET", f"/repos/{REPOSITORY}/pulls/{number}")
+
+    def check_runs(self, commit_sha):
+        if len(commit_sha) != 40 or any(c not in "0123456789abcdef" for c in commit_sha):
+            raise ValueError("invalid commit SHA")
+        result = []
+        for page in range(1, 11):
+            route = (f"/repos/{REPOSITORY}/commits/{commit_sha}/check-runs?"
+                     f"per_page=100&page={page}")
+            batch = self._request("GET", route)
+            if not isinstance(batch, dict) or not isinstance(batch.get("check_runs"), list):
+                raise GitHubAPIError("GitHub check-run response is malformed")
+            result.extend(batch["check_runs"])
+            if len(batch["check_runs"]) < 100:
+                if batch.get("total_count") != len(result):
+                    raise GitHubAPIError("GitHub check-run pagination was incomplete")
+                return result
+        raise GitHubAPIError("GitHub check-run pagination exceeded the bounded page limit")
+
+    def pull_reviews(self, number):
+        if type(number) is not int or number <= 0:
+            raise ValueError("invalid PR number")
+        result = []
+        for page in range(1, 11):
+            route = f"/repos/{REPOSITORY}/pulls/{number}/reviews?per_page=100&page={page}"
+            batch = self._request("GET", route)
+            if not isinstance(batch, list):
+                raise GitHubAPIError("GitHub reviews response is malformed")
+            result.extend(batch)
+            if len(batch) < 100:
+                return result
+        raise GitHubAPIError("GitHub review pagination exceeded the bounded page limit")
+
+    def pull_review_comments(self, number):
+        if type(number) is not int or number <= 0:
+            raise ValueError("invalid PR number")
+        result = []
+        for page in range(1, 11):
+            route = f"/repos/{REPOSITORY}/pulls/{number}/comments?per_page=100&page={page}"
+            batch = self._request("GET", route)
+            if not isinstance(batch, list):
+                raise GitHubAPIError("GitHub review-comment response is malformed")
+            result.extend(batch)
+            if len(batch) < 100:
+                return result
+        raise GitHubAPIError("GitHub review-comment pagination exceeded the bounded page limit")
