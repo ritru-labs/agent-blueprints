@@ -10,3 +10,9 @@ class IdentityTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+from sample.app import add
+
+class AdditionTests(unittest.TestCase):
+    def test_add(self):
+        self.assertEqual(add(2, -3), -1)

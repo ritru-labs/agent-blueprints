@@ -3,3 +3,9 @@
 
 def identity(value):
     return value
+
+
+def add(a, b):
+    return a + b
+
+# PHASE1F_REPAIR_REQUIRED
