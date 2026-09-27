@@ -1,6 +1,6 @@
-# Phase 1C/1D PostgreSQL control-plane experiments
+# Phase 1C/1D/1E PostgreSQL control-plane experiments
 
-This synthetic workflow stores task identity, policy, candidate provenance, verifier results, repair-input intent, session lineage, state transitions, and operation intents in PostgreSQL. The model and Agents API session are context, not the source of operational truth. `ports.py` defines candidate-source and trusted-verifier interfaces. Phase 1C uses the saved Phase 1A ZIP; Phase 1D adds a real two-turn Agents API adapter. Neither phase contacts Jira or publishes to GitHub.
+This synthetic workflow stores task identity, policy, candidate provenance, verifier results, repair-input intent, session lineage, state transitions, and operation intents in PostgreSQL. The model and Agents API session are context, not the source of operational truth. `ports.py` defines candidate-source and trusted-verifier interfaces. Phase 1C uses the saved Phase 1A ZIP; Phase 1D adds a real two-turn Agents API adapter. Phase 1E adds a local bare-Git publication proof. None of these phases contacts Jira or publishes a workflow branch to GitHub.
 
 ## Boundaries
 
@@ -11,6 +11,7 @@ This synthetic workflow stores task identity, policy, candidate provenance, veri
 - The repair-input row stores an idempotency key and SHA-256 of a deterministic, sanitized message, never its text. It is committed before API submission. The worker marks submission `UNCERTAIN` before the call. After a crash, the adapter reads saved session items, matches the message hash and turn, and records that observation. If no saved message can be established, it leaves the outcome uncertain and never blindly resends. A still-`PLANNED` input is reconciled before its first submission.
 - The controller holds a PostgreSQL advisory lock for a run while recovering it. The lock disappears if the worker process dies. Each state change and its event commit together. Verification runs outside a database transaction in a separate constrained Docker container; its sanitized result is then committed with the state transition.
 - External-operation intents have a unique stable key and payload digest. The only enabled kind is `synthetic_notice`, which records a local result without sending anything. A repeated key with the same payload returns the same record; a changed payload is rejected. `OUTCOME_UNKNOWN` cannot be marked successful without reconciliation. No Jira or GitHub adapter or write credential is present.
+- Schema version 3 adds a separate publication intent linked to the current `PASS` verification and candidate. The trusted publisher reconstructs the allowlisted files from the stored ZIP and pinned base commit in an isolated temporary Git object store. It calculates the full Git tree and deterministic commit, then persists their SHA-1 IDs, target branch, local remote identity, and publisher config hash before pushing. The branch is derived from the run UUID, never model output. A create-only Git push is preceded by `OUTCOME_UNKNOWN`; after a crash, a fresh process confirms the exact remote ref and tree before marking `CONFIRMED`. An uncertain write with no observed ref remains unresolved without an automatic resend.
 
 ## Run the proof
 
@@ -39,6 +40,17 @@ cd solutions/jira-to-pr/experiments/control-plane
 
 The live command consumes API and hosted sandbox usage. It writes ignored `.control-runs/phase-1d-live-result.json`; the curated checked-in record is [`evidence/phase-1d-live-repair.json`](evidence/phase-1d-live-repair.json). [`PHASE-1D-RESULTS.md`](PHASE-1D-RESULTS.md) explains the proof and limitations. `repair_cli.py` is the trusted local bridge used by the Node adapter; its `history` command emits only sanitized database fields.
 
+## Run the Phase 1E local publisher proof
+
+This uses the downloaded Phase 1A artifact, the real Phase 1B Docker verifier, a disposable PostgreSQL cluster, and a disposable bare Git remote cloned from this repository. It pushes an isolated branch to that local remote, exits the first publisher process immediately after the push, and starts a fresh process to reconcile the exact remote commit and tree. It consumes no OpenAI API usage and requires no GitHub token.
+
+```bash
+cd solutions/jira-to-pr/experiments/control-plane
+.venv/bin/python run_local_publication.py
+```
+
+The checked-in sanitized record is [`evidence/phase-1e-local-publication.json`](evidence/phase-1e-local-publication.json). [`PHASE-1E-RESULTS.md`](PHASE-1E-RESULTS.md) states what this local proof establishes and what remains for an actual GitHub draft PR.
+
 ## Limits
 
-These are local synthetic persistence and recovery proofs; the tests destroy their PostgreSQL clusters afterward. The local content-addressed store detects tampering on read but is not a replicated or signed artifact service. Schema version 2 has been tested on disposable databases, not rolled out to an operated service. A crash during read-only verification may cause that verification to run again. An uncertain repair submission with no saved API message stays unresolved for human reconciliation. Replacement-session operation is represented and tested in PostgreSQL but was not exercised with a live replacement sandbox. PostgreSQL access control, backups, multi-host operation, review/publication gates, and real external-action reconciliation remain unqualified.
+These are local synthetic persistence and recovery proofs; the tests destroy their PostgreSQL clusters and Phase 1E bare Git remote afterward. The local content-addressed store detects tampering on read but is not a replicated or signed artifact service. Schema version 3 has been tested on disposable databases, not rolled out to an operated service. A crash during read-only verification may cause that verification to run again. An uncertain repair submission with no saved API message stays unresolved for human reconciliation. Replacement-session operation is represented and tested in PostgreSQL but was not exercised with a live replacement sandbox. The publisher's local Git remote proves the exact-tree and recovery gate, but GitHub authentication, branch policy, repository review, draft PR creation, and PR-write reconciliation remain unimplemented. PostgreSQL access control, backups, and multi-host operation remain unqualified.

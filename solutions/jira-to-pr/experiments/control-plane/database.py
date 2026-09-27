@@ -37,7 +37,10 @@ class Store:
                 versions = cur.fetchone()["versions"]
                 if versions == [1]:
                     cur.execute((HERE / "schema_v2.sql").read_text(), prepare=False)
-                elif versions != [1, 2]:
+                    versions = [1, 2]
+                if versions == [1, 2]:
+                    cur.execute((HERE / "schema_v3.sql").read_text(), prepare=False)
+                elif versions != [1, 2, 3]:
                     raise RuntimeError("unsupported control-plane schema version")
 
     @contextmanager
@@ -341,6 +344,66 @@ class Store:
                 return operation
             raise ValueError("completed operation cannot become uncertain")
 
+    def get_publication(self, run_id):
+        with self.connect() as conn:
+            return conn.execute("SELECT * FROM publication_attempts WHERE run_id = %s",
+                                (run_id,)).fetchone()
+
+    def plan_publication(self, run_id, intent):
+        fields = ("candidate_id", "verification_id", "archive_sha256",
+                  "candidate_tree_sha256", "base_commit", "git_tree_sha",
+                  "commit_sha", "branch_ref", "remote_id", "publisher_policy_hash",
+                  "operation_key")
+        with self.connect() as conn:
+            run = conn.execute("SELECT * FROM workflow_runs WHERE id = %s FOR UPDATE",
+                               (run_id,)).fetchone()
+            if run is None or run["state"] != "VERIFIED":
+                raise ValueError("publication requires a verified run")
+            inserted = conn.execute(
+                "INSERT INTO publication_attempts(id, run_id, candidate_id, verification_id, "
+                "archive_sha256, candidate_tree_sha256, base_commit, git_tree_sha, "
+                "commit_sha, branch_ref, remote_id, publisher_policy_hash, operation_key) "
+                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) "
+                "ON CONFLICT (run_id) DO NOTHING RETURNING *",
+                (uuid.uuid4(), run_id, *(intent[field] for field in fields)),
+            ).fetchone()
+            saved = inserted or conn.execute(
+                "SELECT * FROM publication_attempts WHERE run_id = %s FOR UPDATE",
+                (run_id,),
+            ).fetchone()
+            if any(str(saved[field]) != str(intent[field]) for field in fields):
+                raise ValueError("stored publication intent differs from exact candidate or policy")
+            return saved
+
+    def mark_publication_unknown(self, run_id):
+        with self.connect() as conn:
+            conn.execute("SELECT id FROM workflow_runs WHERE id = %s FOR UPDATE", (run_id,))
+            row = conn.execute("SELECT * FROM publication_attempts WHERE run_id = %s FOR UPDATE",
+                               (run_id,)).fetchone()
+            if row is None:
+                raise ValueError("publication intent is missing")
+            if row["state"] == "OUTCOME_UNKNOWN":
+                return row
+            if row["state"] != "PLANNED":
+                raise ValueError("publication has already been confirmed")
+            return conn.execute("UPDATE publication_attempts SET state = 'OUTCOME_UNKNOWN' "
+                                "WHERE id = %s RETURNING *", (row["id"],)).fetchone()
+
+    def confirm_publication(self, run_id):
+        with self.connect() as conn:
+            conn.execute("SELECT id FROM workflow_runs WHERE id = %s FOR UPDATE", (run_id,))
+            row = conn.execute("SELECT * FROM publication_attempts WHERE run_id = %s FOR UPDATE",
+                               (run_id,)).fetchone()
+            if row is None:
+                raise ValueError("publication intent is missing")
+            if row["state"] == "CONFIRMED":
+                return row
+            if row["state"] != "OUTCOME_UNKNOWN":
+                raise ValueError("publication must be uncertain before remote confirmation")
+            return conn.execute("UPDATE publication_attempts SET state = 'CONFIRMED', "
+                                "confirmed_at = clock_timestamp() WHERE id = %s RETURNING *",
+                                (row["id"],)).fetchone()
+
     def summary(self, task_key):
         with self.connect() as conn:
             run = conn.execute("SELECT * FROM workflow_runs WHERE task_key = %s", (task_key,)).fetchone()
@@ -358,6 +421,10 @@ class Store:
                 "(SELECT count(*) FROM workflow_events WHERE run_id = %s) AS events",
                 (run["id"], run["id"], run["id"], run["id"], run["id"]),
             ).fetchone()
+            publication = conn.execute(
+                "SELECT state, branch_ref, commit_sha, git_tree_sha FROM publication_attempts "
+                "WHERE run_id = %s", (run["id"],),
+            ).fetchone()
             return {
                 "task_key": task_key, "run_id": str(run["id"]), "state": run["state"],
                 "session_id": run["session_id"], "current_session_id": run["current_session_id"],
@@ -373,6 +440,10 @@ class Store:
                 "verification_count": counts["verifications"],
                 "repair_count": counts["repairs"], "session_count": counts["sessions"],
                 "event_count": counts["events"],
+                "publication_state": publication["state"] if publication else None,
+                "published_ref": publication["branch_ref"] if publication else None,
+                "published_commit_sha": publication["commit_sha"] if publication else None,
+                "published_git_tree_sha": publication["git_tree_sha"] if publication else None,
             }
 
     def history(self, task_key):
