@@ -58,7 +58,10 @@ class Store:
                     versions = [1, 2, 3, 4, 5, 6, 7, 8]
                 if versions == [1, 2, 3, 4, 5, 6, 7, 8]:
                     cur.execute((HERE / "schema_v9.sql").read_text(), prepare=False)
-                elif versions != [1, 2, 3, 4, 5, 6, 7, 8, 9]:
+                    versions = [1, 2, 3, 4, 5, 6, 7, 8, 9]
+                if versions == [1, 2, 3, 4, 5, 6, 7, 8, 9]:
+                    cur.execute((HERE / "schema_v10.sql").read_text(), prepare=False)
+                elif versions != [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]:
                     raise RuntimeError("unsupported control-plane schema version")
 
     @contextmanager
@@ -100,6 +103,64 @@ class Store:
                              (session_id, run["id"]))
                 self._event(conn, run["id"], None, "RECEIVED", "trusted synthetic task admitted")
             return run
+
+    def plan_initial_session(self, task_key, policy):
+        doc = policy.document
+        request_key = hashlib.sha256(
+            f"{task_key}:{policy.sha256}:initial-session".encode()).hexdigest()
+        with self.connect() as conn:
+            conn.execute("INSERT INTO policy_snapshots(policy_hash, document) VALUES (%s, %s) "
+                         "ON CONFLICT (policy_hash) DO NOTHING",
+                         (policy.sha256, Jsonb(doc)))
+            saved = conn.execute("SELECT document FROM policy_snapshots WHERE policy_hash = %s",
+                                 (policy.sha256,)).fetchone()
+            if saved["document"] != doc:
+                raise ValueError("stored initial-session policy differs")
+            conn.execute("INSERT INTO initial_session_intents(task_key, policy_hash, base_commit, "
+                         "request_key) VALUES (%s, %s, %s, %s) "
+                         "ON CONFLICT (task_key) DO NOTHING",
+                         (task_key, policy.sha256, doc["base_commit"], request_key))
+            row = conn.execute("SELECT * FROM initial_session_intents WHERE task_key = %s "
+                               "FOR UPDATE", (task_key,)).fetchone()
+            if (row["policy_hash"] != policy.sha256 or
+                    row["base_commit"] != doc["base_commit"] or
+                    row["request_key"] != request_key):
+                raise ValueError("initial-session intent differs from pinned task or policy")
+            return row
+
+    def mark_initial_session_uncertain(self, task_key):
+        with self.connect() as conn:
+            row = conn.execute("SELECT * FROM initial_session_intents WHERE task_key = %s "
+                               "FOR UPDATE", (task_key,)).fetchone()
+            if row is None:
+                raise ValueError("initial-session intent is absent")
+            if row["state"] != "PLANNED":
+                return row, False
+            row = conn.execute("UPDATE initial_session_intents SET state = 'OUTCOME_UNKNOWN' "
+                               "WHERE task_key = %s RETURNING *", (task_key,)).fetchone()
+            return row, True
+
+    def confirm_initial_session(self, task_key, session_id):
+        with self.connect() as conn:
+            row = conn.execute("SELECT * FROM initial_session_intents WHERE task_key = %s "
+                               "FOR UPDATE", (task_key,)).fetchone()
+            if row is None:
+                return None  # Older attempts predate the initial-create intent.
+            run = conn.execute("SELECT * FROM workflow_runs WHERE task_key = %s",
+                               (task_key,)).fetchone()
+            if (run is None or run["session_id"] != session_id or
+                    run["policy_hash"] != row["policy_hash"] or
+                    run["base_commit"] != row["base_commit"]):
+                raise ValueError("saved initial session differs from the durable run")
+            if row["state"] == "CONFIRMED":
+                if row["session_id"] != session_id:
+                    raise ValueError("initial session identity changed")
+                return row
+            if row["state"] != "OUTCOME_UNKNOWN":
+                raise ValueError("initial session cannot be confirmed before submission")
+            return conn.execute("UPDATE initial_session_intents SET state = 'CONFIRMED', "
+                                "session_id = %s WHERE task_key = %s RETURNING *",
+                                (session_id, task_key)).fetchone()
 
     def get_run(self, task_key):
         with self.connect() as conn:

@@ -54,19 +54,62 @@ export async function savedInitialTurn(client, sessionId) {
   throw new Error("saved initial turn remains active; resume later without creating a session");
 }
 
+export async function savedInitialSession(client, task, requestKey) {
+  const matches = [];
+  let count = 0;
+  for await (const session of client.beta.agents.sessions.list()) {
+    if (++count > 1000) throw new Error("initial session search exceeded the bounded limit");
+    if (session.metadata?.ritru_task_key === task &&
+        session.metadata?.ritru_initial_key === requestKey) {
+      if (typeof session.id !== "string" || !session.id) {
+        throw new Error("saved initial session has no identity");
+      }
+      matches.push(session.id);
+    }
+  }
+  if (matches.length > 1) throw new Error("initial create has conflicting saved sessions");
+  return matches[0] ?? null;
+}
+
+async function reconcileInitialCreate(client, task, intent) {
+  const sessionId = await savedInitialSession(client, task, intent.request_key);
+  if (!sessionId) {
+    throw new Error("initial create outcome remains unknown; no second session was requested");
+  }
+  controlCall("register-session", ["--task", task, "--session-id", sessionId]);
+  controlCall("initial-confirm", ["--task", task, "--session-id", sessionId]);
+  await resume(client, task);
+}
+
 async function start(client, task) {
+  const intent = controlCall("initial-plan", ["--task", task]);
+  if (intent.state === "CONFIRMED") return resume(client, task);
+  if (intent.state === "OUTCOME_UNKNOWN") {
+    return reconcileInitialCreate(client, task, intent);
+  }
+  if (intent.state !== "PLANNED") throw new Error("initial create has unknown durable state");
   const inputs = await Promise.all(files.map(async (name) => ({
     type: "inline", path: `/workspace/${name}`,
     data: (await readFile(path.join(spike, "sample-project", name))).toString("base64"),
   })));
+  const claimed = controlCall("initial-mark-uncertain", ["--task", task]);
+  if (claimed.request_key !== intent.request_key) {
+    throw new Error("initial create intent changed before submission");
+  }
+  if (!claimed.claimed) {
+    if (claimed.state === "CONFIRMED") return resume(client, task);
+    return reconcileInitialCreate(client, task, intent);
+  }
   const stream = await client.beta.agents.sessions.create({
+    metadata: { ritru_task_key: task, ritru_initial_key: intent.request_key },
     agent: { model: "gpt-6-astra", multi_agent: { enabled: false },
       instructions: "Work only on the synthetic Python project. Follow the exact staged qualification task. Never access the network. Do not claim independent verification or CI passed." },
     environment: { type: "openai_hosted", network: { access: "disabled" }, files: inputs },
     input: "Implement add(a, b) in /workspace/sample/app.py as the arithmetic sum for positive, zero, and negative integers. Preserve identity(value). Add regression tests for add in /workspace/sample/tests/test_app.py. For this staged CI repair exercise, include the exact harmless comment # PHASE1F_REPAIR_REQUIRED in sample/app.py. Run python3 -m unittest discover -s sample/tests -v from /workspace. Create /workspace/outputs/sample-project.zip containing only sample/__init__.py, sample/app.py, and sample/tests/test_app.py at those relative paths. Read back the ZIP listing. This is Candidate #1 and the marker is intentionally left for a later trusted CI finding.",
     stream: true,
-  });
+  }, { idempotencyKey: intent.request_key });
   const { sessionId, turnId } = await completedInitialTurn(stream, task);
+  controlCall("initial-confirm", ["--task", task, "--session-id", sessionId]);
   await commitInitialCandidate(client, task, sessionId, turnId);
 }
 
@@ -74,6 +117,7 @@ async function resume(client, task) {
   const state = controlCall("inspect", ["--task", task]);
   if (state.state === "VERIFIED") return;
   if (state.state === "RECEIVED") {
+    controlCall("initial-confirm", ["--task", task, "--session-id", state.session_id]);
     const turnId = await savedInitialTurn(client, state.current_session_id);
     await commitInitialCandidate(client, task, state.current_session_id, turnId);
     return;

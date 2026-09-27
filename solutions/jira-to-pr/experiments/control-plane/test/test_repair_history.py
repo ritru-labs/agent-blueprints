@@ -97,6 +97,27 @@ class RepairHistoryTests(unittest.TestCase):
         self.task = f"SYN-{db_name}"
         self.session = f"sess_{db_name}"
 
+    def test_initial_session_create_intent_is_durable_and_single_claim(self):
+        first = self.database.plan_initial_session(self.task, self.policy)
+        self.assertEqual(first["state"], "PLANNED")
+        self.assertEqual(self.database.plan_initial_session(self.task, self.policy)["request_key"],
+                         first["request_key"])
+        uncertain, claimed = self.database.mark_initial_session_uncertain(self.task)
+        self.assertTrue(claimed)
+        self.assertEqual(uncertain["state"], "OUTCOME_UNKNOWN")
+        repeated, claimed = self.database.mark_initial_session_uncertain(self.task)
+        self.assertFalse(claimed)
+        self.assertEqual(repeated["request_key"], first["request_key"])
+        with self.assertRaises(ValueError):
+            self.database.confirm_initial_session(self.task, self.session)
+        self.database.create_run(self.task, self.session, self.policy)
+        confirmed = self.database.confirm_initial_session(self.task, self.session)
+        self.assertEqual(confirmed["state"], "CONFIRMED")
+        self.assertEqual(self.database.confirm_initial_session(self.task, self.session)["session_id"],
+                         self.session)
+        with self.assertRaises(ValueError):
+            self.database.confirm_initial_session(self.task, "sess_conflict")
+
     def archive(self, ordinal):
         app = (SPIKE / "sample/app.py").read_text()
         tests = (SPIKE / "sample/tests/test_app.py").read_text()
@@ -339,7 +360,7 @@ class RepairHistoryTests(unittest.TestCase):
         with legacy.connect() as conn:
             versions = conn.execute("SELECT array_agg(version ORDER BY version) AS versions "
                                     "FROM schema_migrations").fetchone()["versions"]
-        self.assertEqual(versions, [1, 2, 3, 4, 5, 6, 7, 8, 9])
+        self.assertEqual(versions, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
 
 
 if __name__ == "__main__":

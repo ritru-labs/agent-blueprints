@@ -32,6 +32,12 @@ def main():
     register = commands.add_parser("register-session")
     register.add_argument("--task", required=True)
     register.add_argument("--session-id", required=True)
+    for name in ("initial-plan", "initial-mark-uncertain"):
+        initial = commands.add_parser(name)
+        initial.add_argument("--task", required=True)
+    initial_confirm = commands.add_parser("initial-confirm")
+    initial_confirm.add_argument("--task", required=True)
+    initial_confirm.add_argument("--session-id", required=True)
     admit = commands.add_parser("admit")
     for flag in ("task", "session-id", "turn-id", "artifact-id", "archive-sha256", "archive"):
         admit.add_argument(f"--{flag}", required=True)
@@ -61,6 +67,18 @@ def main():
     if args.command == "register-session":
         database.create_run(args.task, args.session_id, policy)
         value = database.summary(args.task)
+    elif args.command == "initial-plan":
+        row = database.plan_initial_session(args.task, policy)
+        value = {"state": row["state"], "request_key": row["request_key"],
+                 "session_id": row["session_id"]}
+    elif args.command == "initial-mark-uncertain":
+        row, claimed = database.mark_initial_session_uncertain(args.task)
+        value = {"state": row["state"], "request_key": row["request_key"],
+                 "claimed": claimed}
+    elif args.command == "initial-confirm":
+        row = database.confirm_initial_session(args.task, args.session_id)
+        value = {"status": row["state"], "session_id": row["session_id"]} if row else {
+            "status": "ABSENT"}
     elif args.command == "admit":
         value = controller.admit_candidate(args.task, SavedTurnArtifact(
             args.session_id, args.turn_id, args.artifact_id, args.archive_sha256,
