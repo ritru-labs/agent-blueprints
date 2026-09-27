@@ -26,6 +26,8 @@ class GitHubPolicyTests(unittest.TestCase):
 
     def test_exact_github_policy_is_accepted(self):
         self.assertEqual(self.load(self.document).document, self.document)
+        dotted = dict(self.document, github_target_base="refs/heads/feat/jira-to-pr-v0.1")
+        self.assertEqual(self.load(dotted).document, dotted)
 
     def test_actor_branch_extra_operations_and_write_switch_are_rejected(self):
         changes = (

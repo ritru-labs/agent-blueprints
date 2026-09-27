@@ -41,9 +41,12 @@ class Policy:
         elif (document["external_writes_enabled"] is not True or
               document["allowed_operation_kinds"] != ["git_branch", "draft_pr"] or
               not isinstance(document["github_target_base"], str) or
-              not re.fullmatch(r"refs/heads/[a-zA-Z0-9/_-]{1,100}",
+              not re.fullmatch(r"refs/heads/[a-zA-Z0-9/_.-]{1,100}",
                                document["github_target_base"]) or
               "//" in document["github_target_base"] or
+              ".." in document["github_target_base"] or
+              any(not part or part.startswith(".") or part.endswith(".") or part.endswith(".lock")
+                  for part in document["github_target_base"].removeprefix("refs/heads/").split("/")) or
               document["github_actor_login"] != "binnukyadari"):
             raise ValueError("GitHub policy violates the scoped publication boundary")
         canonical = json.dumps(document, sort_keys=True, separators=(",", ":")).encode()
