@@ -10,9 +10,11 @@ import json
 import os
 import pathlib
 import shutil
+import stat
 import subprocess
 import sys
 import uuid
+import hashlib
 
 from adapters import ContentAddressedStore, Phase1ASavedArtifact, Phase1BTrustedVerifier, REPO_ROOT
 from controller import Controller
@@ -31,15 +33,17 @@ def command(args, *, env, timeout=240):
 
 def start_pg(root, env):
     data = root / "db"
-    socket = root / "socket"
+    socket = pathlib.Path("/private/tmp") / (
+        "jira-pr-socket-" + hashlib.sha256(str(root).encode()).hexdigest()[:12])
+    socket.mkdir(mode=0o700, exist_ok=True)
+    info = socket.lstat()
+    if not stat.S_ISDIR(info.st_mode) or info.st_uid != os.getuid() or info.st_mode & 0o077:
+        raise RuntimeError("private PostgreSQL socket directory has unsafe ownership or mode")
     if not data.exists():
-        socket.mkdir(mode=0o700)
         initial = command(["initdb", "-D", str(data), "-A", "trust", "--no-instructions"],
                           env=env, timeout=40)
         if initial.returncode:
             raise RuntimeError(f"initdb failed: {initial.stderr[-300:]}")
-    else:
-        socket.mkdir(mode=0o700, exist_ok=True)
     status = command(["pg_ctl", "-D", str(data), "status"], env=env, timeout=10)
     if status.returncode:
         options = f"-c listen_addresses='' -c unix_socket_directories={socket} -c unix_socket_permissions=0700"
