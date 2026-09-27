@@ -40,7 +40,10 @@ class Store:
                     versions = [1, 2]
                 if versions == [1, 2]:
                     cur.execute((HERE / "schema_v3.sql").read_text(), prepare=False)
-                elif versions != [1, 2, 3]:
+                    versions = [1, 2, 3]
+                if versions == [1, 2, 3]:
+                    cur.execute((HERE / "schema_v4.sql").read_text(), prepare=False)
+                elif versions != [1, 2, 3, 4]:
                     raise RuntimeError("unsupported control-plane schema version")
 
     @contextmanager
@@ -353,7 +356,7 @@ class Store:
         fields = ("candidate_id", "verification_id", "archive_sha256",
                   "candidate_tree_sha256", "base_commit", "git_tree_sha",
                   "commit_sha", "branch_ref", "remote_id", "publisher_policy_hash",
-                  "operation_key")
+                  "operation_key", "remote_kind")
         with self.connect() as conn:
             run = conn.execute("SELECT * FROM workflow_runs WHERE id = %s FOR UPDATE",
                                (run_id,)).fetchone()
@@ -362,8 +365,9 @@ class Store:
             inserted = conn.execute(
                 "INSERT INTO publication_attempts(id, run_id, candidate_id, verification_id, "
                 "archive_sha256, candidate_tree_sha256, base_commit, git_tree_sha, "
-                "commit_sha, branch_ref, remote_id, publisher_policy_hash, operation_key) "
-                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) "
+                "commit_sha, branch_ref, remote_id, publisher_policy_hash, operation_key, "
+                "remote_kind) "
+                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) "
                 "ON CONFLICT (run_id) DO NOTHING RETURNING *",
                 (uuid.uuid4(), run_id, *(intent[field] for field in fields)),
             ).fetchone()
@@ -404,6 +408,67 @@ class Store:
                                 "confirmed_at = clock_timestamp() WHERE id = %s RETURNING *",
                                 (row["id"],)).fetchone()
 
+    def get_draft_pr(self, run_id):
+        with self.connect() as conn:
+            return conn.execute("SELECT * FROM draft_pr_attempts WHERE run_id = %s",
+                                (run_id,)).fetchone()
+
+    def plan_draft_pr(self, run_id, intent):
+        fields = ("publication_id", "candidate_id", "verification_id", "repository",
+                  "base_ref", "head_ref", "head_commit_sha", "actor_login",
+                  "title_sha256", "body_sha256", "operation_key")
+        with self.connect() as conn:
+            run = conn.execute("SELECT * FROM workflow_runs WHERE id = %s FOR UPDATE",
+                               (run_id,)).fetchone()
+            if run is None or run["state"] != "VERIFIED":
+                raise ValueError("draft PR requires a verified run")
+            inserted = conn.execute(
+                "INSERT INTO draft_pr_attempts(id, run_id, publication_id, candidate_id, "
+                "verification_id, repository, base_ref, head_ref, head_commit_sha, "
+                "actor_login, title_sha256, body_sha256, operation_key) "
+                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) "
+                "ON CONFLICT (run_id) DO NOTHING RETURNING *",
+                (uuid.uuid4(), run_id, *(intent[field] for field in fields)),
+            ).fetchone()
+            saved = inserted or conn.execute(
+                "SELECT * FROM draft_pr_attempts WHERE run_id = %s FOR UPDATE", (run_id,)
+            ).fetchone()
+            if any(str(saved[field]) != str(intent[field]) for field in fields):
+                raise ValueError("stored draft PR intent differs from exact publication or policy")
+            return saved
+
+    def mark_draft_pr_unknown(self, run_id):
+        with self.connect() as conn:
+            conn.execute("SELECT id FROM workflow_runs WHERE id = %s FOR UPDATE", (run_id,))
+            row = conn.execute("SELECT * FROM draft_pr_attempts WHERE run_id = %s FOR UPDATE",
+                               (run_id,)).fetchone()
+            if row is None:
+                raise ValueError("draft PR intent is missing")
+            if row["state"] == "OUTCOME_UNKNOWN":
+                return row
+            if row["state"] != "PLANNED":
+                raise ValueError("draft PR has already been confirmed")
+            return conn.execute("UPDATE draft_pr_attempts SET state = 'OUTCOME_UNKNOWN' "
+                                "WHERE id = %s RETURNING *", (row["id"],)).fetchone()
+
+    def confirm_draft_pr(self, run_id, pr_number, pr_url):
+        with self.connect() as conn:
+            conn.execute("SELECT id FROM workflow_runs WHERE id = %s FOR UPDATE", (run_id,))
+            row = conn.execute("SELECT * FROM draft_pr_attempts WHERE run_id = %s FOR UPDATE",
+                               (run_id,)).fetchone()
+            if row is None:
+                raise ValueError("draft PR intent is missing")
+            if row["state"] == "CONFIRMED":
+                if (row["pr_number"], row["pr_url"]) != (pr_number, pr_url):
+                    raise ValueError("confirmed draft PR identity changed")
+                return row
+            if row["state"] != "OUTCOME_UNKNOWN":
+                raise ValueError("draft PR must be uncertain before remote confirmation")
+            return conn.execute("UPDATE draft_pr_attempts SET state = 'CONFIRMED', "
+                                "pr_number = %s, pr_url = %s, confirmed_at = clock_timestamp() "
+                                "WHERE id = %s RETURNING *",
+                                (pr_number, pr_url, row["id"])).fetchone()
+
     def summary(self, task_key):
         with self.connect() as conn:
             run = conn.execute("SELECT * FROM workflow_runs WHERE task_key = %s", (task_key,)).fetchone()
@@ -425,6 +490,10 @@ class Store:
                 "SELECT state, branch_ref, commit_sha, git_tree_sha FROM publication_attempts "
                 "WHERE run_id = %s", (run["id"],),
             ).fetchone()
+            draft = conn.execute(
+                "SELECT state, pr_number, pr_url FROM draft_pr_attempts WHERE run_id = %s",
+                (run["id"],),
+            ).fetchone()
             return {
                 "task_key": task_key, "run_id": str(run["id"]), "state": run["state"],
                 "session_id": run["session_id"], "current_session_id": run["current_session_id"],
@@ -444,6 +513,9 @@ class Store:
                 "published_ref": publication["branch_ref"] if publication else None,
                 "published_commit_sha": publication["commit_sha"] if publication else None,
                 "published_git_tree_sha": publication["git_tree_sha"] if publication else None,
+                "draft_pr_state": draft["state"] if draft else None,
+                "draft_pr_number": draft["pr_number"] if draft else None,
+                "draft_pr_url": draft["pr_url"] if draft else None,
             }
 
     def history(self, task_key):

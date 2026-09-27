@@ -106,11 +106,8 @@ class ContentAddressedStore:
 
 
 def reconstruct_tree_hash(artifact_path, archive_sha256, base_commit):
-    from config import BASE_COMMIT
-    if base_commit != BASE_COMMIT:
-        raise ValueError("candidate base differs from trusted verifier baseline")
     _, accepted = read_candidate(artifact_path, archive_sha256)
-    baseline = baseline_files(REPO_ROOT)
+    baseline = baseline_files(REPO_ROOT, base_commit)
     with tempfile.TemporaryDirectory(prefix="phase1c-intake-") as temporary:
         tree_hash, _ = materialize_candidate(temporary, baseline, accepted)
     return tree_hash
@@ -126,6 +123,7 @@ class Phase1BTrustedVerifier:
                 [sys.executable, str(PHASE1B / "verify_candidate.py"),
                  "--artifact", str(artifact_path), "--output", str(output),
                  "--expected-sha256", candidate["archive_sha256"],
+                 "--base-commit", candidate["base_commit"],
                  "--source-session-id", candidate["source_session_id"],
                  "--source-artifact-id", candidate["source_artifact_id"]],
                 env=env, cwd=PHASE1B, capture_output=True, text=True,

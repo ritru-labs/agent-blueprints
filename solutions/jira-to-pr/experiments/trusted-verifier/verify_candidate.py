@@ -122,9 +122,9 @@ def check_passed(result, minimum_tests, exact_tests=None):
             result.get("ok") is True and result.get("timed_out") is False)
 
 
-def verify(artifact_path, expected_sha256):
+def verify(artifact_path, expected_sha256, base_commit=BASE_COMMIT):
     digest, accepted = read_candidate(artifact_path, expected_sha256)
-    baseline = baseline_files(REPO_ROOT)
+    baseline = baseline_files(REPO_ROOT, base_commit)
     pinned_image_available()
     with tempfile.TemporaryDirectory(prefix="jira-pr-phase1b-", dir="/private/tmp") as temporary:
         candidate_dir = pathlib.Path(temporary)
@@ -136,7 +136,7 @@ def verify(artifact_path, expected_sha256):
     candidate_ok = len(checks) == 2 and check_passed(checks[1], minimum_tests=1)
     return {
         "artifact_sha256": digest,
-        "base_commit": BASE_COMMIT,
+        "base_commit": base_commit,
         "candidate_tree_sha256": tree_hash,
         "file_sha256": manifest,
         "verifier_image_id": IMAGE_ID,
@@ -158,6 +158,7 @@ def main():
     parser.add_argument("--expected-sha256")
     parser.add_argument("--source-session-id")
     parser.add_argument("--source-artifact-id")
+    parser.add_argument("--base-commit", default=BASE_COMMIT)
     args = parser.parse_args()
     supplied = (args.expected_sha256, args.source_session_id, args.source_artifact_id)
     if any(supplied) and not all(supplied):
@@ -175,7 +176,7 @@ def main():
         "status": "FAIL",
     }
     try:
-        result.update(verify(args.artifact, expected_sha256))
+        result.update(verify(args.artifact, expected_sha256, args.base_commit))
     except (OSError, ValueError, RuntimeError, subprocess.SubprocessError, zipfile.BadZipFile) as error:
         result["error"] = str(error)[:300]
     args.output.parent.mkdir(parents=True, exist_ok=True)

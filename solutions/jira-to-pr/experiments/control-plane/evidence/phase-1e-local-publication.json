@@ -1,7 +1,7 @@
 {
   "artifact_sha256": "28ac19606a8ffa3e62833132107110abac1bc33ff621cf1de7926e1d07d30dda",
   "base_commit": "7a081367533aa19bcb80d13122e0f3664358a5b8",
-  "candidate_id": "49678c7b-be53-4f22-95e5-3eb497ed9ce5",
+  "candidate_id": "b4e15f04-dd2e-456c-8453-f5b615dd42a6",
   "candidate_tree_sha256": "27ce9688fd58e3eac336c87293a99be1d5410ca93d76744cb6c3dbd9bfbe64cc",
   "counts": {
     "candidates": 1,
@@ -17,17 +17,17 @@
     "state_after_restart": "CONFIRMED",
     "state_before_restart": "OUTCOME_UNKNOWN"
   },
-  "published_commit_sha": "8d45654e7fc2e6171b4df50acb4442eb92d3a343",
+  "published_commit_sha": "f2826d25ca6645983c62f1914f96eb44cce98ba8",
   "published_git_tree_sha": "591d6c8c5d8404e1d4ab2bb478fb733a3058f09b",
-  "published_ref": "refs/heads/agent/9a767aae-7525-4656-8bf7-7611309e4311",
-  "publisher_policy_hash": "5c2afe16821f7281678df11290a86963826946d4fbd846d3b9aaafbfcb5ac103",
+  "published_ref": "refs/heads/agent/03d6b24e-a35a-4ab9-b310-ecf13b43f92f",
+  "publisher_policy_hash": "1fa8ad66cb69c3e2f64a89295d4bfc94f6661c9147e2e0465cb9e1ebedcfb9a3",
   "remote_kind": "disposable_local_bare_git",
-  "run_id": "9a767aae-7525-4656-8bf7-7611309e4311",
+  "run_id": "03d6b24e-a35a-4ab9-b310-ecf13b43f92f",
   "schema_version": 1,
   "session_id": "sess_0bc7de7fdb27ee0d006ab80385ab7c819bbeb057833aa8aa79",
   "status": "PASS",
-  "task_key": "PHASE1E-06667a7edd15",
-  "verification_id": "81c1dd59-817d-481a-acc4-e9ac16029814",
+  "task_key": "PHASE1E-26c4f44dccf0",
+  "verification_id": "ddeb4b12-ba33-4b77-8e37-e5897c19aa20",
   "verification_status": "PASS",
   "verifier_image_id": "sha256:2f17fc044b579bab302c2e8054d3a686e2cb9a83de48e70534b94cd8ebbe06a9"
 }

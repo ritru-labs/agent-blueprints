@@ -34,6 +34,7 @@ class LocalBarePublisher:
             raise ValueError("publisher remote is not a bare Git repository")
         if policy.document["external_writes_enabled"] is not False:
             raise ValueError("local qualification requires the synthetic-only run policy")
+        self.remote_kind = "local_bare"
         self.remote_id = hashlib.sha256(str(self.remote).encode()).hexdigest()
         config = {
             "schema_version": 1,
@@ -90,6 +91,9 @@ class LocalBarePublisher:
         if tree != intent["git_tree_sha"]:
             raise PublicationError("remote commit tree differs from the verified publication tree")
 
+    def _preflight(self, run):
+        """Transport-specific identity and base-branch checks before any write."""
+
     def publish(self, task_key, *, interrupt_after_push=False):
         run = self.database.get_run(task_key)
         with self.database.worker_lock(run["id"]):
@@ -97,6 +101,7 @@ class LocalBarePublisher:
             self.database.assert_policy(run, self.policy)
             if run["state"] != "VERIFIED":
                 raise PublicationError("publication requires VERIFIED state")
+            self._preflight(run)
             candidate = self.database.get_candidate(run)
             verification = self.database.get_verification(run)
             if (candidate is None or verification is None or verification["status"] != "PASS" or
@@ -158,6 +163,7 @@ class LocalBarePublisher:
                     "base_commit": base, "git_tree_sha": git_tree, "commit_sha": commit,
                     "branch_ref": ref, "remote_id": self.remote_id,
                     "publisher_policy_hash": self.config_hash, "operation_key": operation_key,
+                    "remote_kind": self.remote_kind,
                 }
                 row = self.database.plan_publication(run["id"], intent)
                 if row["state"] == "CONFIRMED":
@@ -170,6 +176,7 @@ class LocalBarePublisher:
                     if row["state"] != "OUTCOME_UNKNOWN":
                         raise PublicationError("remote branch exists without an uncertain write record")
                     self._check_remote_commit(row)
+                    self._preflight(run)
                     self.database.confirm_publication(run["id"])
                     return self.database.summary(task_key)
                 if row["state"] == "OUTCOME_UNKNOWN":
@@ -181,5 +188,6 @@ class LocalBarePublisher:
                     os._exit(75)
                 self._check_remote_commit(row)
                 self.artifact_store.checked_path(candidate["archive_sha256"], candidate["storage_path"])
+                self._preflight(run)
                 self.database.confirm_publication(run["id"])
                 return self.database.summary(task_key)

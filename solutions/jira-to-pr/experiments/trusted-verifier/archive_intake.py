@@ -3,6 +3,7 @@
 import hashlib
 import json
 import pathlib
+import re
 import stat
 import subprocess
 import zipfile
@@ -56,11 +57,13 @@ def read_candidate(archive_path, expected_sha256):
     return digest, accepted
 
 
-def baseline_files(repo_root):
+def baseline_files(repo_root, base_commit=BASE_COMMIT):
     """Read only the pinned Git object's exact allowed paths, never working-tree files."""
+    if not re.fullmatch(r"[0-9a-f]{40}", base_commit):
+        raise ValueError("trusted base commit must be a full Git SHA")
     result = {}
     for name in ALLOWED_FILES:
-        object_name = f"{BASE_COMMIT}:{BASE_PREFIX}{name}"
+        object_name = f"{base_commit}:{BASE_PREFIX}{name}"
         process = subprocess.run(
             ["git", "show", object_name], cwd=repo_root, capture_output=True, check=False,
         )
