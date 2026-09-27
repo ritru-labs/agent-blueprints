@@ -204,16 +204,21 @@ BEGIN
     FOR item IN SELECT value FROM jsonb_array_elements(required->'required_checks') LOOP
         IF (SELECT count(*) FROM pr_check_observations c
             WHERE c.batch_id = NEW.id AND c.check_name = item->>'name' AND
+                  c.app_slug = item->>'app_slug') <> 1 OR
+           NOT EXISTS (SELECT 1 FROM pr_check_observations c
+            WHERE c.batch_id = NEW.id AND c.check_name = item->>'name' AND
                   c.app_slug = item->>'app_slug' AND c.head_commit_sha = NEW.head_commit_sha AND
-                  c.status = 'completed' AND c.conclusion = 'success') <> 1 THEN
+                  c.status = 'completed' AND c.conclusion = 'success') THEN
             RAISE EXCEPTION 'PASS requires every exact-head trusted check';
         END IF;
     END LOOP;
     approval_limit := (required->>'required_approvals')::integer;
-    SELECT count(DISTINCT reviewer) INTO approvals FROM pr_review_observations r
-      WHERE r.batch_id = NEW.id AND r.state = 'APPROVED' AND
-            r.review_head_sha = NEW.head_commit_sha AND r.finding_code IS NULL AND
-            required->'review_actors' ? r.reviewer;
+    SELECT count(*) INTO approvals FROM (
+      SELECT DISTINCT ON (reviewer) reviewer, state, finding_code
+      FROM pr_review_observations r WHERE r.batch_id = NEW.id AND
+        r.review_head_sha = NEW.head_commit_sha AND required->'review_actors' ? r.reviewer
+      ORDER BY reviewer, review_id DESC
+    ) latest WHERE latest.state = 'APPROVED' AND latest.finding_code IS NULL;
     IF approvals < approval_limit OR EXISTS (
         SELECT 1 FROM pr_review_observations r WHERE r.batch_id = NEW.id AND
           r.review_head_sha = NEW.head_commit_sha AND

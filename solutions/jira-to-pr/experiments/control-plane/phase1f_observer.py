@@ -146,7 +146,7 @@ class TrustedPRObserver:
         selected = []
         findings = []
         states = []
-        approvals = set()
+        latest_by_reviewer = {}
         trusted = set(self.observation_policy.document["review_actors"])
         for item in raw:
             if not isinstance(item, dict) or type(item.get("id")) is not int or item["id"] <= 0:
@@ -177,13 +177,18 @@ class TrustedPRObserver:
                 elif state == "CHANGES_REQUESTED":
                     states.append("FAIL" if code == "ADD_ARITHMETIC" else "NEEDS_HUMAN")
                     findings.append({"code": code or "UNSAFE_REVIEW", "review_id": item["id"]})
-                elif state == "APPROVED" and reviewer in trusted and code is None:
-                    approvals.add(reviewer)
+            if review_head == head_sha and reviewer in trusted:
+                prior = latest_by_reviewer.get(reviewer)
+                if prior is None or item["id"] > prior["review_id"]:
+                    latest_by_reviewer[reviewer] = {
+                        "review_id": item["id"], "state": state, "finding_code": code}
             selected.append({"review_id": item["id"], "reviewer": reviewer,
                              "review_head_sha": review_head, "state": state,
                              "finding_code": code,
                              "body_sha256": hashlib.sha256(body.encode()).hexdigest(),
                              "submitted_at": item.get("submitted_at")})
+        approvals = {reviewer for reviewer, latest in latest_by_reviewer.items()
+                     if latest["state"] == "APPROVED" and latest["finding_code"] is None}
         if len(approvals) < self.observation_policy.document["required_approvals"]:
             states.append("PENDING")
             findings.append({"code": "REQUIRED_APPROVAL_MISSING"})

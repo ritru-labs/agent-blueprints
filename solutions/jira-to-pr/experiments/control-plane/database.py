@@ -52,7 +52,10 @@ class Store:
                     versions = [1, 2, 3, 4, 5, 6]
                 if versions == [1, 2, 3, 4, 5, 6]:
                     cur.execute((HERE / "schema_v7.sql").read_text(), prepare=False)
-                elif versions != [1, 2, 3, 4, 5, 6, 7]:
+                    versions = [1, 2, 3, 4, 5, 6, 7]
+                if versions == [1, 2, 3, 4, 5, 6, 7]:
+                    cur.execute((HERE / "schema_v8.sql").read_text(), prepare=False)
+                elif versions != [1, 2, 3, 4, 5, 6, 7, 8]:
                     raise RuntimeError("unsupported control-plane schema version")
 
     @contextmanager

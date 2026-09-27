@@ -144,6 +144,25 @@ class ObservationTests(DraftPRTests):
         state["reviews"]["1"][0]["commit_id"] = COMMIT
         self.fake._write(state)
         self.assertEqual(self.observer.observe(self.task)["gate"], "PASS")
+        state["reviews"]["1"].append({"id": 72, "state": "DISMISSED", "commit_id": COMMIT,
+                                          "user": {"login": "binnukyadari"}, "body": "",
+                                          "submitted_at": "2026-09-27T04:01:00Z"})
+        self.fake._write(state)
+        self.assertEqual(self.observer.observe(self.task)["gate"], "PENDING")
+
+    def test_phase1f_duplicate_check_rows_cannot_forge_pass(self):
+        self.observer.observe(self.task)
+        head = self.database.latest_pr_head(self.run["id"])
+        clean = {"check_name": "qualification", "app_slug": "github-actions",
+                 "run_attempt": None, "check_suite_id": None,
+                 "head_commit_sha": COMMIT, "status": "completed",
+                 "started_at": "2026-09-27T04:00:00Z",
+                 "completed_at": "2026-09-27T04:01:00Z"}
+        with self.assertRaises(psycopg.Error):
+            self.database.save_pr_observation(
+                head, self.observation_policy, "b" * 64, "PASS", [],
+                [{**clean, "check_id": 81, "conclusion": "success"},
+                 {**clean, "check_id": 82, "conclusion": "failure"}], [])
 
     def test_phase1f_uncertain_github_read_and_competing_worker_fail_closed(self):
         class UncertainGitHub(FakeGitHub):
