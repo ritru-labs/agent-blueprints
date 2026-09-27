@@ -118,6 +118,89 @@ class RepairHistoryTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.database.confirm_initial_session(self.task, "sess_conflict")
 
+    def test_direct_sql_cannot_forge_initial_session_confirmation(self):
+        missing_task = f"{self.task}-missing"
+        self.database.plan_initial_session(missing_task, self.policy)
+        self.database.mark_initial_session_uncertain(missing_task)
+
+        wrong_session_task = f"{self.task}-session"
+        self.database.plan_initial_session(wrong_session_task, self.policy)
+        self.database.mark_initial_session_uncertain(wrong_session_task)
+        self.database.create_run(wrong_session_task, self.session, self.policy)
+
+        wrong_policy_task = f"{self.task}-policy"
+        wrong_base_task = f"{self.task}-base"
+        self.database.create_run(wrong_policy_task, f"{self.session}-policy", self.policy)
+        self.database.create_run(wrong_base_task, f"{self.session}-base", self.policy)
+        other_policy_hash = "e" * 64 if self.policy.sha256 != "e" * 64 else "d" * 64
+        other_base = "f" * 40 if self.policy.document["base_commit"] != "f" * 40 else "e" * 40
+        with self.database.connect() as conn:
+            conn.execute("INSERT INTO policy_snapshots(policy_hash, document) VALUES (%s, %s)",
+                         (other_policy_hash, Jsonb(self.policy.document)))
+            for task, policy_hash, base in (
+                    (wrong_policy_task, other_policy_hash, self.policy.document["base_commit"]),
+                    (wrong_base_task, self.policy.sha256, other_base)):
+                conn.execute(
+                    "INSERT INTO initial_session_intents(task_key, policy_hash, base_commit, "
+                    "request_key, state) VALUES (%s, %s, %s, %s, 'OUTCOME_UNKNOWN')",
+                    (task, policy_hash, base, hashlib.sha256(task.encode()).hexdigest()),
+                )
+
+        for case, task, session in (
+                ("missing workflow", missing_task, self.session),
+                ("wrong original session", wrong_session_task, f"{self.session}-forged"),
+                ("wrong policy", wrong_policy_task, f"{self.session}-policy"),
+                ("wrong base", wrong_base_task, f"{self.session}-base")):
+            with self.subTest(case=case):
+                with self.assertRaises(psycopg.errors.ForeignKeyViolation):
+                    with self.database.connect() as conn:
+                        conn.execute("UPDATE initial_session_intents "
+                                     "SET state = 'CONFIRMED', session_id = %s "
+                                     "WHERE task_key = %s", (session, task))
+
+    def test_final_evidence_requires_confirmed_initial_session_intent(self):
+        run = self.database.create_run(self.task, self.session, self.policy)
+        with self.assertRaisesRegex(ValueError, "exactly one initial-session intent"):
+            self.database.confirmed_initial_session_intent(run)
+        self.database.plan_initial_session(self.task, self.policy)
+        self.database.mark_initial_session_uncertain(self.task)
+        with self.assertRaisesRegex(ValueError, "differs from successful workflow"):
+            self.database.confirmed_initial_session_intent(run)
+        confirmed = self.database.confirm_initial_session(self.task, self.session)
+        self.assertEqual(self.database.confirmed_initial_session_intent(run), confirmed)
+
+    def test_v10_intents_survive_identity_constraint_migration(self):
+        confirmed_task = f"{self.task}-confirmed"
+        uncertain_task = f"{self.task}-uncertain"
+        self.database.plan_initial_session(confirmed_task, self.policy)
+        self.database.mark_initial_session_uncertain(confirmed_task)
+        run = self.database.create_run(confirmed_task, self.session, self.policy)
+        self.database.confirm_initial_session(confirmed_task, self.session)
+        self.database.plan_initial_session(uncertain_task, self.policy)
+        self.database.mark_initial_session_uncertain(uncertain_task)
+        with self.database.connect() as conn:
+            before = conn.execute(
+                "SELECT task_key, state, session_id, policy_hash, base_commit, request_key "
+                "FROM initial_session_intents ORDER BY task_key"
+            ).fetchall()
+            conn.execute("ALTER TABLE initial_session_intents "
+                         "DROP CONSTRAINT initial_session_run_identity_fk")
+            conn.execute("ALTER TABLE workflow_runs "
+                         "DROP CONSTRAINT workflow_initial_session_identity_unique")
+            conn.execute("DELETE FROM schema_migrations WHERE version = 11")
+        self.database.migrate()
+        with self.database.connect() as conn:
+            after = conn.execute(
+                "SELECT task_key, state, session_id, policy_hash, base_commit, request_key "
+                "FROM initial_session_intents ORDER BY task_key"
+            ).fetchall()
+            version = conn.execute("SELECT max(version) AS version FROM schema_migrations") \
+                .fetchone()["version"]
+        self.assertEqual(after, before)
+        self.assertEqual(version, 11)
+        self.assertEqual(self.database.confirmed_initial_session_intent(run)["state"],
+                         "CONFIRMED")
+
     def archive(self, ordinal):
         app = (SPIKE / "sample/app.py").read_text()
         tests = (SPIKE / "sample/tests/test_app.py").read_text()
@@ -360,7 +443,7 @@ class RepairHistoryTests(unittest.TestCase):
         with legacy.connect() as conn:
             versions = conn.execute("SELECT array_agg(version ORDER BY version) AS versions "
                                     "FROM schema_migrations").fetchone()["versions"]
-        self.assertEqual(versions, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
+        self.assertEqual(versions, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11])
 
 
 if __name__ == "__main__":

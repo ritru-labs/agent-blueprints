@@ -5,6 +5,7 @@ the next invocation proves restart recovery. No Jira or merge operation exists.
 """
 
 import argparse
+import hashlib
 import json
 import os
 import pathlib
@@ -272,6 +273,7 @@ def stage_evidence(database, task):
         raise RuntimeError("fresh exact-head CI/review observation did not pass")
     final_readback_at = datetime.now(timezone.utc).isoformat()
     run = database.get_run(task)
+    initial_intent = database.confirmed_initial_session_intent(run)
     with database.connect() as conn:
         candidates = conn.execute("SELECT * FROM candidate_artifacts WHERE run_id = %s "
                                   "ORDER BY ordinal", (run["id"],)).fetchall()
@@ -349,9 +351,20 @@ def stage_evidence(database, task):
     if latest_observation["id"] != final_observation["id"]:
         raise RuntimeError("newer CI/review evidence superseded the final PASS")
     value = {
-        "schema_version": 1, "phase": "1F", "status": "PASS",
+        "schema_version": 2, "phase": "1F", "status": "PASS",
         "repository": REPOSITORY, "run_id": str(run["id"]),
         "session_id": run["session_id"], "draft_pr_number": drafts[0]["pr_number"],
+        "initial_session_intent": {
+            "task_key": initial_intent["task_key"],
+            "state": initial_intent["state"],
+            "session_id": initial_intent["session_id"],
+            "policy_sha256": initial_intent["policy_hash"],
+            "base_commit": initial_intent["base_commit"],
+            "request_key_digest_sha256": hashlib.sha256(
+                initial_intent["request_key"].encode()).hexdigest(),
+            "created_at": initial_intent["created_at"].isoformat(),
+            "confirmed_at": initial_intent["updated_at"].isoformat(),
+        },
         "same_session_continuation": True,
         "draft_pr_url": drafts[0]["pr_url"], "base_commit": run["base_commit"],
         "candidate_ids": [str(c["id"]) for c in candidates],
@@ -375,7 +388,8 @@ def stage_evidence(database, task):
             for h in heads],
         "process_restarts": restarts,
         "counts": {"candidates": 2, "verifications": 2, "publications": 2,
-                   "pr_heads": 2, "draft_prs": 1, "ci_repairs": 1},
+                   "pr_heads": 2, "draft_prs": 1, "ci_repairs": 1,
+                   "initial_session_intents": 1},
         "automatic_merge": False,
     }
     save_private(ROOT / "phase1f-result.json", value)

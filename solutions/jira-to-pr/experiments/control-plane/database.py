@@ -61,7 +61,10 @@ class Store:
                     versions = [1, 2, 3, 4, 5, 6, 7, 8, 9]
                 if versions == [1, 2, 3, 4, 5, 6, 7, 8, 9]:
                     cur.execute((HERE / "schema_v10.sql").read_text(), prepare=False)
-                elif versions != [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]:
+                    versions = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+                if versions == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]:
+                    cur.execute((HERE / "schema_v11.sql").read_text(), prepare=False)
+                elif versions != [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]:
                     raise RuntimeError("unsupported control-plane schema version")
 
     @contextmanager
@@ -161,6 +164,24 @@ class Store:
             return conn.execute("UPDATE initial_session_intents SET state = 'CONFIRMED', "
                                 "session_id = %s WHERE task_key = %s RETURNING *",
                                 (session_id, task_key)).fetchone()
+
+    def confirmed_initial_session_intent(self, run):
+        with self.connect() as conn:
+            rows = conn.execute(
+                "SELECT * FROM initial_session_intents "
+                "WHERE task_key = %s OR session_id = %s",
+                (run["task_key"], run["session_id"]),
+            ).fetchall()
+        if len(rows) != 1:
+            raise ValueError("successful workflow requires exactly one initial-session intent")
+        intent = rows[0]
+        if (intent["state"] != "CONFIRMED" or
+                (intent["task_key"], intent["session_id"], intent["policy_hash"],
+                 intent["base_commit"]) !=
+                (run["task_key"], run["session_id"], run["policy_hash"],
+                 run["base_commit"])):
+            raise ValueError("confirmed initial-session intent differs from successful workflow")
+        return intent
 
     def get_run(self, task_key):
         with self.connect() as conn:
