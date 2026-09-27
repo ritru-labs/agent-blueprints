@@ -11,12 +11,13 @@ from database import Store
 from draft_pr import DraftPRCoordinator
 from github_api import GitHubAPI
 from github_publisher import GitHubPublisher
+from pr_body_update import DraftPRBodyCoordinator
 from policy import Policy
 
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("action", choices=("publish", "draft-pr"))
+    parser.add_argument("action", choices=("publish", "draft-pr", "sync-pr-body"))
     parser.add_argument("--task", required=True)
     parser.add_argument("--store-dir", type=pathlib.Path, required=True)
     parser.add_argument("--policy", type=pathlib.Path, required=True)
@@ -32,9 +33,12 @@ def main():
     if args.action == "publish":
         result = GitHubPublisher(database, policy, artifact_store, github).publish(
             args.task, interrupt_after_push=args.interrupt_after_write)
-    else:
+    elif args.action == "draft-pr":
         result = DraftPRCoordinator(database, policy, artifact_store, github).create_or_reconcile(
             args.task, interrupt_after_create=args.interrupt_after_write)
+    else:
+        result = DraftPRBodyCoordinator(database, policy, artifact_store, github).sync(
+            args.task, interrupt_after_update=args.interrupt_after_write)
     print(json.dumps(result, sort_keys=True))
     return 0
 

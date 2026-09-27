@@ -12,6 +12,15 @@ const hash = (raw) => createHash("sha256").update(raw).digest("hex");
 async function run(task, interrupt) {
   const client = new OpenAI();
   const before = controlCall("inspect", ["--task", task]);
+  if (["CANDIDATE_READY", "VERIFYING"].includes(before.state)) {
+    const recovered = controlCall("verify", ["--task", task]);
+    if (recovered.state !== "VERIFIED" || recovered.verification_status !== "PASS") {
+      throw new Error("candidate recovery did not produce fresh trusted PASS");
+    }
+    console.log(JSON.stringify({ task_key: task, state: recovered.state,
+      candidate_count: recovered.candidate_count, action: "recovered_verification" }));
+    return;
+  }
   if (before.state !== "VERIFIED") throw new Error("CI repair needs the current verified candidate");
   const prior = controlCall("ci-status", ["--task", task]);
   if (prior.status === "ABSENT" || prior.failed_candidate_id !== before.candidate_id) {
@@ -64,8 +73,9 @@ async function run(task, interrupt) {
 
 async function main() {
   requireApiKey(process.env.OPENAI_API_KEY);
-  if (!process.env.PHASE1C_DATABASE_URL || !process.env.PHASE1D_POLICY_PATH) {
-    throw new Error("PostgreSQL URL and trusted run policy path are required");
+  if (!process.env.PHASE1C_DATABASE_URL || !process.env.PHASE1D_POLICY_PATH ||
+      !process.env.PHASE1F_OBSERVATION_POLICY_PATH) {
+    throw new Error("PostgreSQL URL and trusted run/observation policy paths are required");
   }
   const [command, flag, task] = process.argv.slice(2);
   if (!["run", "resume"].includes(command) || flag !== "--task" || !task) {

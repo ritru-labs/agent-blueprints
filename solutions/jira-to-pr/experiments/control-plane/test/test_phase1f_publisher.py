@@ -135,6 +135,14 @@ class CIRepublishTests(unittest.TestCase):
              str(self.fake_path), interrupt],
             cwd=HERE, env=env, capture_output=True, text=True, timeout=120)
 
+    def body_worker(self, interrupt):
+        env = dict(os.environ, PHASE1C_DATABASE_URL=self.dsn)
+        env.pop("OPENAI_API_KEY", None)
+        return subprocess.run(
+            [sys.executable, str(HERE / "test/fake_body_worker.py"), self.task,
+             str(self.policy_path), str(self.store.root), str(self.fake_path), interrupt],
+            cwd=HERE, env=env, capture_output=True, text=True, timeout=120)
+
     def test_repaired_branch_update_crash_reconciles_same_pr_and_new_ci(self):
         run = self.database.get_run(self.task)
         old_pub = self.database.get_publication(run["id"])
@@ -164,6 +172,17 @@ class CIRepublishTests(unittest.TestCase):
                                           "rev-parse", f"{new_pub['commit_sha']}^"], text=True).strip()
         self.assertEqual(parent, old_pub["commit_sha"])
         self.assertEqual(self.fake.pull(1)["head"]["sha"], new_pub["commit_sha"])
+        body_first = self.body_worker("yes")
+        self.assertEqual(body_first.returncode, 75, body_first.stderr)
+        self.assertEqual(self.database.get_pr_body_update(self.database.latest_pr_head(run["id"])["id"])["state"],
+                         "OUTCOME_UNKNOWN")
+        body_second = self.body_worker("no")
+        self.assertEqual(body_second.returncode, 0, body_second.stderr)
+        body_again = self.body_worker("no")
+        self.assertEqual(body_again.returncode, 0, body_again.stderr)
+        self.assertEqual(self.fake._read().get("body_update_count"), 1)
+        self.assertIn(str(run["candidate_id"]), self.fake.pull(1)["body"])
+        self.assertIn(new_pub["commit_sha"], self.fake.pull(1)["body"])
         state = self.fake._read()
         state["check_runs"][new_pub["commit_sha"]] = [
             {**self.check(new_pub["commit_sha"], 2, None),

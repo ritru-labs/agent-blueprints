@@ -1,0 +1,13 @@
+{
+  "findings": [
+    {
+      "check": "qualification",
+      "code": "REQUIRED_CHECK_MISSING"
+    }
+  ],
+  "gate": "PENDING",
+  "head_commit_sha": "42b5c3669f7a836bf0a2ce0b5a438ea43ca213a4",
+  "observation_id": "7aff108c-8938-460f-b008-362f066414ee",
+  "phase": "1F",
+  "pr_number": 1
+}

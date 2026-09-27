@@ -49,7 +49,10 @@ class Store:
                     versions = [1, 2, 3, 4, 5]
                 if versions == [1, 2, 3, 4, 5]:
                     cur.execute((HERE / "schema_v6.sql").read_text(), prepare=False)
-                elif versions != [1, 2, 3, 4, 5, 6]:
+                    versions = [1, 2, 3, 4, 5, 6]
+                if versions == [1, 2, 3, 4, 5, 6]:
+                    cur.execute((HERE / "schema_v7.sql").read_text(), prepare=False)
+                elif versions != [1, 2, 3, 4, 5, 6, 7]:
                     raise RuntimeError("unsupported control-plane schema version")
 
     @contextmanager
@@ -721,6 +724,72 @@ class Store:
                 (uuid.uuid4(), run_id, draft["id"], publication_id, run["candidate_id"],
                  run["verification_id"], publication["commit_sha"], prior["ordinal"] + 1),
             ).fetchone()
+
+    def get_pr_body_update(self, head_link_id):
+        with self.connect() as conn:
+            return conn.execute("SELECT * FROM pr_body_update_attempts WHERE head_link_id = %s",
+                                (head_link_id,)).fetchone()
+
+    def prior_pr_body_sha(self, run_id, head):
+        with self.connect() as conn:
+            if head["ordinal"] == 2:
+                row = conn.execute("SELECT body_sha256 FROM draft_pr_attempts WHERE run_id = %s",
+                                   (run_id,)).fetchone()
+                return row["body_sha256"] if row else None
+            row = conn.execute(
+                "SELECT u.body_sha256 FROM pr_body_update_attempts u JOIN pr_head_links h "
+                "ON h.id = u.head_link_id WHERE h.run_id = %s AND h.ordinal = %s AND "
+                "u.state = 'CONFIRMED'", (run_id, head["ordinal"] - 1),
+            ).fetchone()
+            return row["body_sha256"] if row else None
+
+    def plan_pr_body_update(self, run_id, intent):
+        fields = ("draft_pr_id", "head_link_id", "candidate_id", "verification_id",
+                  "publication_id", "head_commit_sha", "previous_body_sha256",
+                  "body_sha256", "operation_key")
+        with self.connect() as conn:
+            conn.execute("SELECT id FROM workflow_runs WHERE id = %s FOR UPDATE", (run_id,))
+            inserted = conn.execute(
+                "INSERT INTO pr_body_update_attempts(id, run_id, draft_pr_id, head_link_id, "
+                "candidate_id, verification_id, publication_id, head_commit_sha, "
+                "previous_body_sha256, body_sha256, operation_key) "
+                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) "
+                "ON CONFLICT (head_link_id) DO NOTHING RETURNING *",
+                (uuid.uuid4(), run_id, *(intent[field] for field in fields)),
+            ).fetchone()
+            row = inserted or conn.execute("SELECT * FROM pr_body_update_attempts "
+                                           "WHERE head_link_id = %s FOR UPDATE",
+                                           (intent["head_link_id"],)).fetchone()
+            if any(str(row[field]) != str(intent[field]) for field in fields):
+                raise ValueError("stored PR body update differs from exact head intent")
+            return row
+
+    def mark_pr_body_update_unknown(self, head_link_id):
+        with self.connect() as conn:
+            row = conn.execute("SELECT * FROM pr_body_update_attempts WHERE head_link_id = %s "
+                               "FOR UPDATE", (head_link_id,)).fetchone()
+            if row is None:
+                raise ValueError("PR body update intent is absent")
+            if row["state"] == "OUTCOME_UNKNOWN":
+                return row
+            if row["state"] != "PLANNED":
+                raise ValueError("PR body update has already been confirmed")
+            return conn.execute("UPDATE pr_body_update_attempts SET state = 'OUTCOME_UNKNOWN' "
+                                "WHERE id = %s RETURNING *", (row["id"],)).fetchone()
+
+    def confirm_pr_body_update(self, head_link_id):
+        with self.connect() as conn:
+            row = conn.execute("SELECT * FROM pr_body_update_attempts WHERE head_link_id = %s "
+                               "FOR UPDATE", (head_link_id,)).fetchone()
+            if row is None:
+                raise ValueError("PR body update intent is absent")
+            if row["state"] == "CONFIRMED":
+                return row
+            if row["state"] != "OUTCOME_UNKNOWN":
+                raise ValueError("PR body update requires uncertain remote outcome")
+            return conn.execute("UPDATE pr_body_update_attempts SET state = 'CONFIRMED', "
+                                "confirmed_at = clock_timestamp() WHERE id = %s RETURNING *",
+                                (row["id"],)).fetchone()
 
     def repair_count(self, run_id):
         with self.connect() as conn:

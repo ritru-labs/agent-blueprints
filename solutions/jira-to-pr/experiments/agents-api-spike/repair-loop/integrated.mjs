@@ -32,9 +32,11 @@ export function controlCall(command, args = []) {
                        "PHASE1C_DATABASE_URL", "TMPDIR"]) {
     if (process.env[name]) environment[name] = process.env[name];
   }
+  const observationOptions = process.env.PHASE1F_OBSERVATION_POLICY_PATH ?
+    ["--observation-policy", process.env.PHASE1F_OBSERVATION_POLICY_PATH] : [];
   const result = spawnSync(python, [path.join(control, "repair_cli.py"),
     "--store-dir", storeDir, "--policy", process.env.PHASE1D_POLICY_PATH ?? path.join(control, "policy.json"),
-    command, ...args], {
+    ...observationOptions, command, ...args], {
     cwd: control, env: environment, shell: false, encoding: "utf8", timeout: 180_000,
     maxBuffer: 1_000_000,
   });

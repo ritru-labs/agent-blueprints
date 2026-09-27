@@ -37,6 +37,16 @@ class FakeGitHub:
                 return pull
         return None
 
+    def update_draft_pull_body(self, number, body):
+        state = self._read()
+        for pull in state["pulls"]:
+            if pull["number"] == number:
+                pull["body"] = body
+                state["body_update_count"] = state.get("body_update_count", 0) + 1
+                self._write(state)
+                return pull
+        return None
+
     def check_runs(self, head_sha):
         return list(self._read().get("check_runs", {}).get(head_sha, []))
 

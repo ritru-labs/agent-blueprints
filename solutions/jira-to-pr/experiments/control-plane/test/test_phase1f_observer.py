@@ -15,6 +15,9 @@ from test_draft_pr import DraftPRTests, HERE, COMMIT
 from adapters import SavedTurnArtifact
 from controller import Controller
 from test_publication import AcceptingVerifier, SPIKE
+from database import BusyRun
+from github_api import GitHubAPIError
+from fake_github import FakeGitHub
 
 
 class ObservationTests(DraftPRTests):
@@ -125,6 +128,39 @@ class ObservationTests(DraftPRTests):
         with self.assertRaisesRegex(ValueError, "invalid required check"):
             ObservationPolicy.from_document(document)
 
+    def test_phase1f_stale_approval_cannot_authorize_current_head(self):
+        document = json.loads(json.dumps(self.policy_document))
+        document["required_approvals"] = 1
+        self.observation_policy = ObservationPolicy.from_document(document)
+        self.observer = TrustedPRObserver(self.database, self.policy, self.observation_policy,
+                                          self.fake)
+        self.set_checks(self.check())
+        state = self.fake._read()
+        state["reviews"] = {"1": [{"id": 71, "state": "APPROVED", "commit_id": "f" * 40,
+                                   "user": {"login": "binnukyadari"}, "body": "",
+                                   "submitted_at": "2026-09-27T04:00:00Z"}]}
+        self.fake._write(state)
+        self.assertEqual(self.observer.observe(self.task)["gate"], "PENDING")
+        state["reviews"]["1"][0]["commit_id"] = COMMIT
+        self.fake._write(state)
+        self.assertEqual(self.observer.observe(self.task)["gate"], "PASS")
+
+    def test_phase1f_uncertain_github_read_and_competing_worker_fail_closed(self):
+        class UncertainGitHub(FakeGitHub):
+            def check_runs(self, head_sha):
+                raise GitHubAPIError("uncertain check-run response")
+
+        observer = TrustedPRObserver(self.database, self.policy, self.observation_policy,
+                                     UncertainGitHub(self.fake_path))
+        with self.assertRaisesRegex(GitHubAPIError, "uncertain"):
+            observer.observe(self.task)
+        with self.database.worker_lock(self.run["id"]):
+            with self.assertRaises(BusyRun):
+                self.observer.observe(self.task)
+        with self.database.connect() as conn:
+            self.assertEqual(conn.execute("SELECT count(*) AS n FROM pr_observation_batches")
+                             .fetchone()["n"], 0)
+
     def test_phase1f_review_text_is_hashed_or_sent_to_human(self):
         self.set_checks(self.check())
         state = self.fake._read()
@@ -211,6 +247,7 @@ class ObservationTests(DraftPRTests):
         verified = controller.resume(self.task)
         self.assertEqual((verified["candidate_count"], verified["verification_count"],
                           verified["state"]), (2, 2, "VERIFIED"))
+        self.assertEqual(controller.admit_candidate(self.task, source)["candidate_count"], 2)
         self.assertNotEqual(verified["candidate_id"], str(self.candidate["id"]))
         with self.assertRaisesRegex(ValueError, "stale candidate"):
             self.database.save_pr_observation(self.database.latest_pr_head(self.run["id"]),

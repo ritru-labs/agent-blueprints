@@ -9,6 +9,8 @@ import sys
 from adapters import ContentAddressedStore, Phase1BTrustedVerifier, SavedTurnArtifact
 from controller import Controller
 from database import Store
+from github_api import GitHubAPI
+from phase1f_observer import ObservationPolicy, TrustedPRObserver
 from policy import Policy
 
 HERE = pathlib.Path(__file__).resolve().parent
@@ -24,6 +26,7 @@ def main():
     parser.add_argument("--store-dir", type=pathlib.Path,
                         default=HERE / ".control-runs/artifacts")
     parser.add_argument("--policy", type=pathlib.Path, default=HERE / "policy.json")
+    parser.add_argument("--observation-policy", type=pathlib.Path)
     commands = parser.add_subparsers(dest="command", required=True)
     commands.add_parser("init-db")
     register = commands.add_parser("register-session")
@@ -69,6 +72,14 @@ def main():
     elif args.command == "mark-uncertain":
         value = safe_json(controller.mark_repair_uncertain(args.task))
     elif args.command == "ci-plan":
+        if args.observation_policy is None:
+            raise ValueError("CI repair planning requires a trusted observation policy")
+        run = database.get_run(args.task)
+        prior = database.current_ci_repair(run["id"])
+        if prior is None or prior["failed_candidate_id"] != run["candidate_id"]:
+            observation_policy = ObservationPolicy.from_document(
+                json.loads(args.observation_policy.read_text()))
+            TrustedPRObserver(database, policy, observation_policy, GitHubAPI()).observe(args.task)
         value = controller.plan_ci_repair(args.task)
     elif args.command == "ci-mark-uncertain":
         value = safe_json(controller.mark_ci_repair_uncertain(args.task))

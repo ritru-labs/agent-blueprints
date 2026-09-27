@@ -117,6 +117,11 @@ class GitHubAPI:
             raise ValueError("invalid PR number")
         return self._request("GET", f"/repos/{REPOSITORY}/pulls/{number}")
 
+    def update_draft_pull_body(self, number, body):
+        if type(number) is not int or number <= 0 or not isinstance(body, str) or len(body) > 4000:
+            raise ValueError("invalid bounded draft PR body update")
+        return self._request("PATCH", f"/repos/{REPOSITORY}/pulls/{number}", {"body": body})
+
     def check_runs(self, commit_sha):
         if len(commit_sha) != 40 or any(c not in "0123456789abcdef" for c in commit_sha):
             raise ValueError("invalid commit SHA")
