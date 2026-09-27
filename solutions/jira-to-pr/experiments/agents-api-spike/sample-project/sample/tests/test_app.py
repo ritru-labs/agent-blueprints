@@ -16,3 +16,5 @@ from sample.app import add
 class AdditionTests(unittest.TestCase):
     def test_add(self):
         self.assertEqual(add(2, -3), -1)
+    def test_negative(self):
+        self.assertEqual(add(-4, 6), 2)

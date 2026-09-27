@@ -7,5 +7,3 @@ def identity(value):
 
 def add(a, b):
     return a + b
-
-# PHASE1F_REPAIR_REQUIRED
