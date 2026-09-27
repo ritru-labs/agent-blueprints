@@ -111,6 +111,9 @@ class TrustedPRObserver:
             if (item.get("head_sha") != head_sha or
                     status not in ("queued", "in_progress", "completed") or
                     (status == "completed") != (conclusion is not None) or
+                    (status == "completed" and
+                     (not isinstance(item.get("started_at"), str) or
+                      not isinstance(item.get("completed_at"), str))) or
                     (conclusion is not None and conclusion not in
                      ("success", "failure", "cancelled", "timed_out", "action_required",
                       "neutral", "skipped", "stale"))):

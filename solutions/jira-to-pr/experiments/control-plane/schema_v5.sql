@@ -82,7 +82,6 @@ CREATE TABLE pr_observation_batches (
     gate text NOT NULL CHECK (gate IN ('PASS', 'PENDING', 'FAIL', 'NEEDS_HUMAN')),
     findings jsonb NOT NULL CHECK (octet_length(findings::text) <= 4096),
     observed_at timestamptz NOT NULL DEFAULT clock_timestamp(),
-    UNIQUE (head_link_id, payload_sha256),
     FOREIGN KEY (head_link_id, run_id, candidate_id, verification_id,
                  publication_id, draft_pr_id, head_commit_sha)
         REFERENCES pr_head_links(id, run_id, candidate_id, verification_id,

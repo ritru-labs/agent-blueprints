@@ -80,9 +80,28 @@ class ObservationTests(DraftPRTests):
             self.assertEqual(check["check_id"], 82)
             self.assertNotIn("UNTRUSTED LOG", str(rows) + str(check))
 
+    def test_phase1f_return_to_prior_payload_is_a_new_current_observation(self):
+        self.set_checks(self.check(check_id=81))
+        first = self.observer.observe(self.task)
+        self.assertEqual(first["gate"], "PASS")
+        self.set_checks(self.check(check_id=82, conclusion="failure"))
+        failed = self.observer.observe(self.task)
+        self.assertEqual(failed["gate"], "FAIL")
+        self.set_checks(self.check(check_id=81))
+        current = self.observer.observe(self.task)
+        self.assertEqual(current["gate"], "PASS")
+        self.assertNotEqual(current["id"], first["id"])
+        self.assertEqual(self.database.latest_pr_observation(self.run["id"])["id"], current["id"])
+        self.assertEqual(self.observer.observe(self.task)["id"], current["id"])
+
     def test_phase1f_stale_check_and_moved_pr_fail_closed(self):
         self.set_checks(self.check(sha="e" * 40))
         with self.assertRaisesRegex(ObservationConflict, "stale"):
+            self.observer.observe(self.task)
+        missing_time = self.check()
+        missing_time["completed_at"] = None
+        self.set_checks(missing_time)
+        with self.assertRaisesRegex(ObservationConflict, "unknown result"):
             self.observer.observe(self.task)
         state = self.fake._read()
         state["refs"][self.head_ref] = "f" * 40

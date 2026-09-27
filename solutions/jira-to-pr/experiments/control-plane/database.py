@@ -55,7 +55,10 @@ class Store:
                     versions = [1, 2, 3, 4, 5, 6, 7]
                 if versions == [1, 2, 3, 4, 5, 6, 7]:
                     cur.execute((HERE / "schema_v8.sql").read_text(), prepare=False)
-                elif versions != [1, 2, 3, 4, 5, 6, 7, 8]:
+                    versions = [1, 2, 3, 4, 5, 6, 7, 8]
+                if versions == [1, 2, 3, 4, 5, 6, 7, 8]:
+                    cur.execute((HERE / "schema_v9.sql").read_text(), prepare=False)
+                elif versions != [1, 2, 3, 4, 5, 6, 7, 8, 9]:
                     raise RuntimeError("unsupported control-plane schema version")
 
     @contextmanager
@@ -621,23 +624,24 @@ class Store:
                                   (run["id"],)).fetchone()
             if pinned["policy_sha256"] != policy.sha256:
                 raise ValueError("CI/review observation policy drift")
+            latest_batch = conn.execute(
+                "SELECT * FROM pr_observation_batches WHERE head_link_id = %s "
+                "ORDER BY observed_at DESC, id DESC LIMIT 1", (head["id"],),
+            ).fetchone()
+            if latest_batch and latest_batch["payload_sha256"] == payload_sha:
+                if (latest_batch["gate"] != gate or latest_batch["findings"] != findings or
+                        latest_batch["policy_sha256"] != policy.sha256):
+                    raise ValueError("observation digest collided with different findings")
+                return latest_batch
             batch = conn.execute(
                 "INSERT INTO pr_observation_batches(id, head_link_id, run_id, candidate_id, "
                 "verification_id, publication_id, draft_pr_id, head_commit_sha, "
                 "policy_sha256, payload_sha256, gate, findings) "
-                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) "
-                "ON CONFLICT (head_link_id, payload_sha256) DO NOTHING RETURNING *",
+                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING *",
                 (uuid.uuid4(), head["id"], head["run_id"], head["candidate_id"],
                  head["verification_id"], head["publication_id"], head["draft_pr_id"],
                  head["head_commit_sha"], policy.sha256, payload_sha, gate, Jsonb(findings)),
             ).fetchone()
-            if batch is None:
-                batch = conn.execute("SELECT * FROM pr_observation_batches WHERE "
-                                     "head_link_id = %s AND payload_sha256 = %s",
-                                     (head["id"], payload_sha)).fetchone()
-                if batch["gate"] != gate or batch["findings"] != findings:
-                    raise ValueError("observation digest collided with different findings")
-                return batch
             for check in checks:
                 conn.execute(
                     "INSERT INTO pr_check_observations(id, batch_id, check_name, app_slug, check_id, "

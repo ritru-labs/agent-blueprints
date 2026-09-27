@@ -12,6 +12,7 @@ import re
 import subprocess
 import sys
 import uuid
+from datetime import datetime, timezone
 
 from adapters import ContentAddressedStore
 from archive_intake import read_candidate
@@ -174,13 +175,16 @@ def repin_unstarted_run(database, state):
     return state
 
 
-def stage_observe(database, task):
-    observer = TrustedPRObserver(
+def trusted_observer(database):
+    return TrustedPRObserver(
         database, Policy.load(ROOT / "policy.json"),
         ObservationPolicy.from_document(json.loads((ROOT / "observation-policy.json").read_text())),
         GitHubAPI(),
     )
-    batch = observer.observe(task)
+
+
+def stage_observe(database, task):
+    batch = trusted_observer(database).observe(task)
     print(json.dumps({"stage": "observe", "observation_id": str(batch["id"]),
                       "head_commit_sha": batch["head_commit_sha"],
                       "gate": batch["gate"], "findings": batch["findings"]}, sort_keys=True))
@@ -254,6 +258,14 @@ def stage_body_sync(database, task, env):
 
 
 def stage_evidence(database, task):
+    restarts = progress()
+    if (restarts.get("repair_submission_exit_code") != 75 or
+            restarts.get("branch_update_exit_code") != 75):
+        raise RuntimeError("Phase 1F restart proof is incomplete")
+    final_observation = trusted_observer(database).observe(task)
+    if final_observation["gate"] != "PASS":
+        raise RuntimeError("fresh exact-head CI/review observation did not pass")
+    final_readback_at = datetime.now(timezone.utc).isoformat()
     run = database.get_run(task)
     with database.connect() as conn:
         candidates = conn.execute("SELECT * FROM candidate_artifacts WHERE run_id = %s "
@@ -273,10 +285,18 @@ def stage_evidence(database, task):
     if (len(candidates), len(verifications), len(publications), len(heads),
             len(repairs), len(drafts)) != (2, 2, 2, 2, 1, 1):
         raise RuntimeError("Phase 1F durable lineage has duplicate or missing records")
+    failed_observation = next(
+        (item for item in observations if item["id"] == repairs[0]["observation_id"]), None)
+    if (failed_observation is None or failed_observation["gate"] != "FAIL" or
+            failed_observation["head_commit_sha"] != heads[0]["head_commit_sha"]):
+        raise RuntimeError("repair is not bound to the first head's CI failure")
     body_update = database.get_pr_body_update(heads[-1]["id"])
     if body_update is None or body_update["state"] != "CONFIRMED":
         raise RuntimeError("current PR body update lacks exact-head confirmation")
     if ([v["status"] for v in verifications] != ["PASS", "PASS"] or
+            run["current_session_id"] != run["session_id"] or
+            any(c["source_session_id"] != run["session_id"] for c in candidates) or
+            repairs[0]["session_id"] != run["session_id"] or
             [h["head_commit_sha"] for h in heads] != [p["commit_sha"] for p in publications] or
             any(c["id"] != v["candidate_id"] or c["id"] != p["candidate_id"] or
                 v["id"] != p["verification_id"] for c, v, p in
@@ -285,21 +305,49 @@ def stage_evidence(database, task):
             repairs[0]["status"] != "OBSERVED" or
             len({c["archive_sha256"] for c in candidates}) != 2 or
             len({c["tree_sha256"] for c in candidates}) != 2 or
-            not any(o["head_commit_sha"] == heads[0]["head_commit_sha"] and o["gate"] == "FAIL"
-                    for o in observations) or
-            not any(o["head_commit_sha"] == heads[1]["head_commit_sha"] and o["gate"] == "PASS"
-                    for o in observations)):
+            final_observation["head_commit_sha"] != heads[1]["head_commit_sha"] or
+            observations[-1]["id"] != final_observation["id"] or
+            observations[-1]["gate"] != "PASS"):
         raise RuntimeError("candidate, publication, or exact-head CI lineage is incomplete")
+    required_checks = []
+    with database.connect() as conn:
+        for observation, conclusion in ((failed_observation, "failure"),
+                                        (final_observation, "success")):
+            rows = conn.execute(
+                "SELECT check_name, app_slug, check_id, run_attempt, check_suite_id, "
+                "head_commit_sha, status, conclusion, started_at, completed_at "
+                "FROM pr_check_observations WHERE batch_id = %s",
+                (observation["id"],),
+            ).fetchall()
+            if (len(rows) != 1 or rows[0]["head_commit_sha"] != observation["head_commit_sha"] or
+                    rows[0]["status"] != "completed" or rows[0]["conclusion"] != conclusion or
+                    rows[0]["started_at"] is None or rows[0]["completed_at"] is None):
+                raise RuntimeError("required check is not a completed exact-head CI result")
+            check = rows[0]
+            required_checks.append({
+                "observation_id": str(observation["id"]),
+                "head_commit_sha": check["head_commit_sha"],
+                "check_name": check["check_name"], "app_slug": check["app_slug"],
+                "check_id": check["check_id"], "run_attempt": check["run_attempt"],
+                "check_suite_id": check["check_suite_id"], "status": check["status"],
+                "conclusion": check["conclusion"],
+                "started_at": check["started_at"].isoformat() if check["started_at"] else None,
+                "completed_at": check["completed_at"].isoformat() if check["completed_at"] else None,
+            })
     github = GitHubAPI()
     pull = github.pull(drafts[0]["pr_number"])
     if pull["head"]["sha"] != heads[1]["head_commit_sha"] or \
             github.ref_sha(publications[1]["branch_ref"]) != publications[1]["commit_sha"] or \
             github.commit_tree_sha(publications[1]["commit_sha"]) != publications[1]["git_tree_sha"]:
         raise RuntimeError("live GitHub readback differs from final durable head")
+    latest_observation = database.latest_pr_observation(run["id"])
+    if latest_observation["id"] != final_observation["id"]:
+        raise RuntimeError("newer CI/review evidence superseded the final PASS")
     value = {
         "schema_version": 1, "phase": "1F", "status": "PASS",
         "repository": REPOSITORY, "run_id": str(run["id"]),
         "session_id": run["session_id"], "draft_pr_number": drafts[0]["pr_number"],
+        "same_session_continuation": True,
         "draft_pr_url": drafts[0]["pr_url"], "base_commit": run["base_commit"],
         "candidate_ids": [str(c["id"]) for c in candidates],
         "candidate_artifact_sha256": [c["archive_sha256"] for c in candidates],
@@ -310,13 +358,17 @@ def stage_evidence(database, task):
         "head_commit_sha": [h["head_commit_sha"] for h in heads],
         "ci_repair_id": str(repairs[0]["id"]),
         "ci_repair_status": repairs[0]["status"],
+        "repair_observation_id": str(failed_observation["id"]),
+        "final_observation_id": str(final_observation["id"]),
+        "final_readback_at": final_readback_at,
+        "required_checks": required_checks,
         "pr_body_update_id": str(body_update["id"]),
         "pr_body_update_state": body_update["state"],
         "observation_gates_by_head": [
             {"head_commit_sha": h["head_commit_sha"],
              "gates": [o["gate"] for o in observations if o["head_commit_sha"] == h["head_commit_sha"]]}
             for h in heads],
-        "process_restarts": progress(),
+        "process_restarts": restarts,
         "counts": {"candidates": 2, "verifications": 2, "publications": 2,
                    "pr_heads": 2, "draft_prs": 1, "ci_repairs": 1},
         "automatic_merge": False,

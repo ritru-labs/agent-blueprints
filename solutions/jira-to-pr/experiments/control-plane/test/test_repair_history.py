@@ -339,7 +339,7 @@ class RepairHistoryTests(unittest.TestCase):
         with legacy.connect() as conn:
             versions = conn.execute("SELECT array_agg(version ORDER BY version) AS versions "
                                     "FROM schema_migrations").fetchone()["versions"]
-        self.assertEqual(versions, [1, 2, 3, 4, 5, 6, 7, 8])
+        self.assertEqual(versions, [1, 2, 3, 4, 5, 6, 7, 8, 9])
 
 
 if __name__ == "__main__":
