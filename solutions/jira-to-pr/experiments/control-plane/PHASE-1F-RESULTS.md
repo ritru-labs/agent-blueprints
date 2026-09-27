@@ -1,6 +1,6 @@
 # Phase 1F CI/review observation and draft PR repair
 
-**Status: partial qualification. Phase 1F is not closed.** The exact-head GitHub CI and same-PR republication path passed with two locally constructed synthetic candidates. A live Agents API continuation was attempted but the organization returned a usage or billing limit before creating its first session. The saved `.control-runs/phase1f-live/` state can be resumed after the limit is lifted.
+**Status: partial qualification. Phase 1F is not closed.** The exact-head GitHub CI and same-PR republication path passed with two locally constructed synthetic candidates. The live Agents API initial attempt registered a session, but its saved root turn failed with `usage_limit_exceeded` before producing a candidate. Its PostgreSQL history remains under ignored `.control-runs/phase1f-live/`; [sanitized blocker evidence](evidence/phase-1f-live-blocker.json) records the saved state. A fresh named attempt can be started after the limit is lifted.
 
 ## Verified results
 
@@ -19,6 +19,6 @@ Reviews and inline review comments are classified before storage or agent input.
 
 ## Remaining proof
 
-The GitHub path above used `synthetic_local_*` session and turn IDs. It **does not prove** same-session Agents API repair or recovery of an uncertain live repair message. The live driver `run_phase1f_qualification.py` is staged to perform that proof with a fresh qualification PR, a deliberate process exit after repair input submission, saved-session reconciliation, fresh independent verification, same-PR republication, and fresh CI. It stopped at the OpenAI organization's usage or billing limit before any candidate or new PR was created. Once access is restored, run its `initial`, `observe`, `repair-submit`, `repair-resume`, `publish-submit`, `publish-resume`, `body-sync`, `observe`, and `evidence` stages in order. The `observe` stages may be repeated while CI is pending.
+The GitHub path above used `synthetic_local_*` session and turn IDs. It **does not prove** same-session Agents API repair or recovery of an uncertain live repair message. The live driver `run_phase1f_qualification.py` is staged to perform that proof with a fresh qualification PR, a deliberate process exit after repair input submission, saved-session reconciliation, fresh independent verification, same-PR republication, and fresh CI. The first live session has zero candidates, verifications, or GitHub writes because its root turn failed with `usage_limit_exceeded`. Once access is restored, start a new attempt with `initial --run-name phase1f-live-retry-1`, then run `observe`, `repair-submit`, `repair-resume`, `publish-submit`, `publish-resume`, `body-sync`, `observe`, and `evidence` with the same `--run-name`. The `observe` stages may be repeated while CI is pending. Retain the first attempt's directory for audit; do not reissue its failed initial session as a repair input.
 
 No production service rollout, GitHub App token, human review approval, Jira write, merge, or deployment is claimed.

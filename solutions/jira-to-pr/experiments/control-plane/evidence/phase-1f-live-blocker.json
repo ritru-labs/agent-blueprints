@@ -1,0 +1,16 @@
+{
+  "phase": "1F",
+  "status": "BLOCKED",
+  "scope": "live_agents_api_initial_attempt",
+  "task_key": "GH-CI-f30f3e3f4d56",
+  "base_commit_sha": "66b816cb24ed2efc5baa2d5f76df06afd66ce215",
+  "session_id": "sess_0b02f10e222a786f006ab89f0ec23c819987b033fae65c8e1c",
+  "root_turn_id": "turn_0b02f10e222a786f006ab89f1723788199bef95064e9e487ec",
+  "root_turn_status": "failed",
+  "error_code": "usage_limit_exceeded",
+  "workflow_state": "RECEIVED",
+  "candidate_count": 0,
+  "verification_count": 0,
+  "publication_count": 0,
+  "draft_pr_count": 0
+}

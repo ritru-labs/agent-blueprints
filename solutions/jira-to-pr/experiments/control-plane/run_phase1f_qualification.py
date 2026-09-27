@@ -8,6 +8,7 @@ import argparse
 import json
 import os
 import pathlib
+import re
 import subprocess
 import sys
 import uuid
@@ -332,7 +333,13 @@ def main():
                                           "repair-resume", "publish-submit", "publish-resume",
                                           "body-sync",
                                           "evidence"))
+    parser.add_argument("--run-name", default="phase1f-live",
+                        help="private qualification attempt directory name under .control-runs")
     args = parser.parse_args()
+    if not re.fullmatch(r"phase1f-live(?:-[a-zA-Z0-9-]{1,48})?", args.run_name):
+        parser.error("run name must be phase1f-live or phase1f-live-SUFFIX")
+    global ROOT
+    ROOT = HERE / ".control-runs" / args.run_name
     if args.stage != "initial" and not (ROOT / "run.json").exists():
         raise RuntimeError("Phase 1F qualification run has not been initialized")
     state = initialize() if args.stage == "initial" else json.loads((ROOT / "run.json").read_text())
