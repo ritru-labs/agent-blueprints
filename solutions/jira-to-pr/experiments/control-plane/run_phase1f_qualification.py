@@ -131,9 +131,14 @@ def stage_initial(database, task, env):
     try:
         run = database.get_run(task)
     except KeyError:
-        result = node_child("phase1f_qualification.mjs", task, env)
+        result = node_child("phase1f_qualification.mjs", task, env, "start")
         check_child(result, "initial Agents API candidate")
         run = database.get_run(task)
+    else:
+        if run["state"] in ("RECEIVED", "CANDIDATE_READY", "VERIFYING"):
+            result = node_child("phase1f_qualification.mjs", task, env, "resume")
+            check_child(result, "saved initial Agents API candidate recovery")
+            run = database.get_run(task)
     if run["state"] != "VERIFIED":
         raise RuntimeError("initial candidate did not reach trusted VERIFIED state")
     candidate = database.get_candidate(run)
