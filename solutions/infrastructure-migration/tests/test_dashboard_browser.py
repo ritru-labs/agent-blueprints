@@ -80,11 +80,16 @@ def test_dashboard_full_browser_review_download_rejection_and_cancellation(
             page = context.new_page()
             errors = []
             page.on("pageerror", lambda error: errors.append(str(error)))
+
+            def capture(name):
+                page.evaluate("window.scrollTo(0, 0)")
+                page.screenshot(path=str(screenshots / name), full_page=True)
+
             page.goto(address)
             expect(
                 page.get_by_role("heading", name="Migration workspace", exact=True)
             ).to_be_visible()
-            page.screenshot(path=str(screenshots / "dashboard-disconnected.png"), full_page=True)
+            capture("dashboard-disconnected.png")
 
             def connect(subject):
                 page.get_by_label("Organization ID", exact=True).fill(str(store.tenant_id))
@@ -131,7 +136,7 @@ def test_dashboard_full_browser_review_download_rejection_and_cancellation(
             if runner:
                 expect(page.locator("#checks")).to_contain_text("Passed in isolated runner")
             run = page.locator("#detail-run").inner_text().split(" ")[1]
-            page.screenshot(path=str(screenshots / "dashboard-assessor.png"), full_page=True)
+            capture("dashboard-assessor.png")
             page.get_by_role("button", name="Disconnect", exact=True).click()
             expect(page.locator("#code-content")).to_have_text("")
             connect("reviewer")
@@ -146,7 +151,7 @@ def test_dashboard_full_browser_review_download_rejection_and_cancellation(
             assert downloaded.suggested_filename == f"migration-{run}.zip"
             with zipfile.ZipFile(io.BytesIO(Path(downloaded.path()).read_bytes())) as package:
                 assert "index.ts" in package.namelist() and "import.json" in package.namelist()
-            page.screenshot(path=str(screenshots / "dashboard-reviewer.png"), full_page=True)
+            capture("dashboard-reviewer.png")
             page.get_by_role("button", name="Approve package", exact=True).click()
             page.get_by_label(
                 "I reviewed the generated files, validation results, and blockers."
@@ -157,9 +162,9 @@ def test_dashboard_full_browser_review_download_rejection_and_cancellation(
             page.get_by_role("button", name="Refresh", exact=True).click()
             expect(page.locator("#detail-status")).to_have_text("Reviewed · execution blocked")
             expect(page.get_by_text("Live execution disabled", exact=True)).to_be_visible()
-            page.screenshot(path=str(screenshots / "dashboard-reviewed.png"), full_page=True)
+            capture("dashboard-reviewed.png")
             page.set_viewport_size({"width": 390, "height": 844})
-            page.screenshot(path=str(screenshots / "dashboard-mobile.png"), full_page=True)
+            capture("dashboard-mobile.png")
             assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
             page.set_viewport_size({"width": 1440, "height": 1120})
             page.get_by_role("button", name="Disconnect", exact=True).click()

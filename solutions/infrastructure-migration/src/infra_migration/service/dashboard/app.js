@@ -40,7 +40,7 @@
     state.inventory = null; state.selectedIds.clear(); state.intent = null; state.cursor = null;
     state.busy = false; state.paginated = false; state.previewTicket++;
     $("connect-form").reset(); $("prepare-form").reset(); $("code-content").textContent = "";
-    $("code-file").replaceChildren(); $("checks").replaceChildren(); $("blockers").replaceChildren();
+    $("code-file").replaceChildren(); $("code-format").textContent = ""; $("checks").replaceChildren(); $("blockers").replaceChildren();
     $("progress").replaceChildren(); $("detail-run").textContent = "";
     $("session-org").textContent = ""; $("session-roles").textContent = "";
     delete $("decision-form").dataset.run; delete $("decision-form").dataset.digest;
@@ -190,7 +190,13 @@
       if (ticket !== state.previewTicket || state.selected?.run_id !== run.run_id) return;
       if (data.artifact_digest !== state.selected.result?.artifact_digest) throw new Error("The package changed. Refresh before reviewing.");
       $("code-file").replaceChildren(...data.files.map((name) => { const option = node("option", name); option.value = name; return option; }));
-      $("code-file").value = data.file; $("code-content").textContent = data.content;
+      $("code-file").value = data.file;
+      let content = data.content;
+      if (data.file.endsWith(".json")) {
+        try { content = JSON.stringify(JSON.parse(content), null, 2); } catch (_) { /* Keep exact text if not JSON. */ }
+      }
+      $("code-content").textContent = content;
+      $("code-format").textContent = data.file.endsWith(".json") ? "JSON formatted for readability. Downloads retain the original files." : "";
     } catch (error) { if (ticket === state.previewTicket) $("code-content").textContent = "Verified preview unavailable."; report(error); }
   }
   function renderSelection() {
