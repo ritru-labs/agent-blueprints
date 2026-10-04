@@ -101,8 +101,26 @@ def test_dashboard_full_browser_review_download_rejection_and_cancellation(
             )
             page.get_by_role("button", name="Select supported", exact=True).click()
             expect(page.locator("#selection-count")).to_have_text("2 selected")
+            interrupted = False
+
+            def lose_first_submission_response(route):
+                nonlocal interrupted
+                if route.request.method == "POST" and not interrupted:
+                    interrupted = True
+                    response = route.fetch()
+                    assert response.status == 202
+                    route.abort()
+                else:
+                    route.continue_()
+
+            page.route("**/runs", lose_first_submission_response)
+            page.get_by_role("button", name="Prepare package →", exact=True).click()
+            expect(page.locator("#notice")).to_contain_text("Request outcome unclear")
             page.get_by_role("button", name="Prepare package →", exact=True).click()
             expect(page.locator("#detail-status")).to_have_text("Queued")
+            with store.connection() as db:
+                assert db.execute("SELECT count(*) AS n FROM service_jobs").fetchone()["n"] == 1
+            page.unroute("**/runs", lose_first_submission_response)
             worker.once(store.tenant_id)
             page.get_by_role("button", name="Refresh", exact=True).click()
             expect(page.locator("#detail-status")).to_have_text("Awaiting review")

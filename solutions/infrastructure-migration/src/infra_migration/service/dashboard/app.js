@@ -78,7 +78,11 @@
     } catch (error) {
       if (epoch !== state.epoch) throw new Error("SESSION_CHANGED");
       if (error.name === "AbortError" || error instanceof TypeError) {
-        throw new Error("Request outcome unclear. Retry the same submission to recover its original run.");
+        const message = options.method === "POST" ? (path === "/runs" ?
+          "Request outcome unclear. Retry the same submission to recover its original run." :
+          "Action outcome unclear. Refresh this preparation before submitting another action.") :
+          "Service connection interrupted. Refresh to try again.";
+        throw new Error(message);
       }
       throw error;
     } finally { clearTimeout(timeout); state.controllers.delete(controller); }
