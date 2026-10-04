@@ -303,5 +303,6 @@
   });
   document.addEventListener("visibilitychange", schedulePoll);
   window.addEventListener("pagehide", () => disconnect(""));
+  $("script-required").hidden = true;
   $("connect-button").disabled = false;
 })();
