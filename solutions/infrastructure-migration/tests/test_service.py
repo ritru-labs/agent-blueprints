@@ -186,6 +186,7 @@ def test_dashboard_assets_csp_and_session_permissions(signing, tmp_path):
     response = client.get("/")
     assert response.status_code == 200
     assert "Migration workspace" in response.text
+    assert 'id="connect-form" class="connect-form" method="post" action="/"' in response.text
     assert "script-src 'self'" in response.headers["content-security-policy"]
     assert "frame-ancestors 'none'" in response.headers["content-security-policy"]
     assert response.headers["cache-control"] == "no-store"

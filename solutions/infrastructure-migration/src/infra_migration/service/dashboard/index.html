@@ -21,13 +21,14 @@
 <header class="topbar"><span>Workspace <span class="slash">/</span> Infrastructure migration</span><span class="execution-badge"><span class="small-dot" aria-hidden="true"></span> Live execution disabled</span></header>
 <main id="main">
   <div class="page-heading"><div><p class="eyebrow">AWS → PULUMI</p><h1>Migration workspace</h1><p class="muted">Assess existing infrastructure. Prepare code. Review with confidence.</p></div><a class="button secondary" href="#new-run">＋ New preparation</a></div>
+  <noscript><p class="notice error">Enable JavaScript to connect and use this workspace.</p></noscript>
   <div id="notice" class="notice" role="status" aria-live="polite" hidden></div>
   <section id="connection" class="card connection" aria-labelledby="connection-title">
     <div><p class="eyebrow">ORGANIZATION ACCESS</p><h2 id="connection-title">Connect your workspace</h2><p class="muted">Use an approved organization access token. Your roles are checked by the service.</p></div>
-    <form id="connect-form" class="connect-form">
+    <form id="connect-form" class="connect-form" method="post" action="/">
       <label>Organization ID<input id="organization" name="organization" type="text" autocomplete="off" spellcheck="false" placeholder="Organization UUID" required></label>
       <label>Access token<input id="access-token" name="access-token" type="password" autocomplete="off" spellcheck="false" maxlength="8192" required></label>
-      <button id="connect-button" class="button primary" type="submit">Connect workspace</button>
+      <button id="connect-button" class="button primary" type="submit" disabled>Connect workspace</button>
     </form>
     <p class="fine-print">Tokens stay in this tab’s memory and are cleared on disconnect or reload. Browser sign-in integration is still pending.</p>
   </section>
@@ -42,7 +43,7 @@
     <section id="new-run" class="card" aria-labelledby="prepare-title">
       <div class="section-heading"><div><p class="eyebrow">01 / PREPARE</p><h2 id="prepare-title">Bring your inventory</h2></div><span class="pill neutral">Snapshot assessment</span></div>
       <p class="muted">Upload an inventory JSON file, then select the resources for this package. Uploaded snapshots stay unverified until live assessment.</p>
-      <form id="prepare-form">
+      <form id="prepare-form" method="post" action="/">
         <label class="upload-zone" for="inventory-file"><span class="upload-icon" aria-hidden="true">↑</span><strong>Choose an inventory snapshot</strong><span>JSON · under 900 KB · up to 1,000 resources</span><input id="inventory-file" type="file" accept=".json,application/json" disabled></label>
         <div id="inventory-summary" class="inventory-summary" hidden></div>
         <div id="selection" hidden>
@@ -74,6 +75,6 @@
   <footer class="page-footer"><span>Governed preparation · Scope, checks, and review stay visible.</span><span>Live AWS qualification pending</span></footer>
 </main>
 </div>
-<dialog id="decision-dialog" aria-labelledby="decision-title"><form id="decision-form"><p class="eyebrow">PACKAGE DECISION</p><h2 id="decision-title">Approve this package?</h2><p id="decision-copy" class="muted"></p><label class="confirmation"><input id="decision-check" type="checkbox" required> I reviewed the generated files, validation results, and blockers.</label><p class="fine-print">Infrastructure changes remain disabled after this decision.</p><div class="dialog-actions"><button id="decision-close" class="button secondary" type="button">Go back</button><button id="decision-submit" class="button primary" type="submit">Confirm approval</button></div></form></dialog>
+<dialog id="decision-dialog" aria-labelledby="decision-title"><form id="decision-form" method="post" action="/"><p class="eyebrow">PACKAGE DECISION</p><h2 id="decision-title">Approve this package?</h2><p id="decision-copy" class="muted"></p><label class="confirmation"><input id="decision-check" type="checkbox" required> I reviewed the generated files, validation results, and blockers.</label><p class="fine-print">Infrastructure changes remain disabled after this decision.</p><div class="dialog-actions"><button id="decision-close" class="button secondary" type="button">Go back</button><button id="decision-submit" class="button primary" type="submit">Confirm approval</button></div></form></dialog>
 </body>
 </html>

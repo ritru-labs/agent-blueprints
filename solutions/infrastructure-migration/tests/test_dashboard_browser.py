@@ -206,6 +206,17 @@ def test_dashboard_full_browser_review_download_rejection_and_cancellation(
             expect(page.locator("#access-token")).to_have_value("")
             assert not errors, errors
             context.close()
+            no_script = browser.new_context(java_script_enabled=False)
+            fallback = no_script.new_page()
+            fallback.goto(address)
+            expect(
+                fallback.get_by_role("button", name="Connect workspace", exact=True)
+            ).to_be_disabled()
+            expect(fallback.locator("#connect-form")).to_have_attribute("method", "post")
+            expect(
+                fallback.get_by_text("Enable JavaScript to connect and use this workspace.")
+            ).to_be_visible()
+            no_script.close()
             browser.close()
     finally:
         server.should_exit = True
