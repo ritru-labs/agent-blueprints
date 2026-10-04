@@ -77,6 +77,8 @@ class Executor:
         record = self.ledger.read(principal, operation)
         binding = ExecutionBinding.model_validate_json(record["binding"])
         self.ledger.authorize(principal, binding, "executor")
+        if binding.adapter_version != self.adapter.version:
+            raise AccessDenied("Reconciliation adapter does not match the recorded operation")
         if record["status"] in {"INTENT", "SUBMITTED"}:
             self.ledger.transition(principal, operation, (record["status"],), "OUTCOME_UNKNOWN")
         elif record["status"] != "OUTCOME_UNKNOWN":

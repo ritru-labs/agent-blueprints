@@ -52,7 +52,7 @@ class Resource(Contract):
 
 class Inventory(Contract):
     scope: Scope
-    provenance: Literal["synthetic_fixture", "aws_api"]
+    provenance: Literal["synthetic_fixture", "aws_api", "operator_supplied_snapshot"]
     observed_at: datetime
     coverage: Literal["complete_fixture", "partial"]
     gaps: tuple[str, ...] = ()

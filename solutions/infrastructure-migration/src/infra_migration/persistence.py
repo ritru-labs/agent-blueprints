@@ -15,14 +15,15 @@ def tenant_schema(tenant_id: UUID):
 
 
 @contextmanager
-def postgres_checkpointer(conninfo: str, tenant_id: UUID):
+def tenant_connection(conninfo: str, tenant_id: UUID):
     schema = tenant_schema(tenant_id)
     with psycopg.connect(
         conninfo,
         autocommit=True,
         prepare_threshold=0,
+        connect_timeout=5,
         row_factory=dict_row,
-        options=f"-c search_path={schema}",
+        options=f"-c search_path={schema} -c statement_timeout=10000 -c lock_timeout=5000",
     ) as connection:
         with connection.cursor(row_factory=tuple_row) as cursor:
             cursor.execute(
@@ -39,6 +40,12 @@ def postgres_checkpointer(conninfo: str, tenant_id: UUID):
             )
             if cursor.fetchone()[0]:
                 raise AccessDenied("Checkpoint role has cross-tenant schema access")
+        yield connection
+
+
+@contextmanager
+def postgres_checkpointer(conninfo: str, tenant_id: UUID):
+    with tenant_connection(conninfo, tenant_id) as connection:
         saver = PostgresSaver(connection)
         saver.setup()
         yield saver

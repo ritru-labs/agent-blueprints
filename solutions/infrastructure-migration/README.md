@@ -51,7 +51,11 @@ Optionally add `--model APPROVED_MODEL --official-docs` and an approved HTTPS `-
 
 `PulumiImportAdapter` validates protected physical IDs, provider account/region, expected configuration, a zero-change preview, and trusted health observations. `CloudFormationTransferAdapter` separates retention from release, verifies physical identity and freeze evidence, restricts change-set effects, and reconciles observed outcomes. Neither adapter has passed live cloud acceptance. Source re-adoption and universal rollback are not assumed.
 
-The CLI uses OS identity and SQLite for a trusted local operator. PostgreSQL checkpoint support requires a dedicated restricted role and schema per tenant. A hosted authenticated API, production approval storage, deployed credential broker, egress enforcement, encrypted evidence retention, and operational recovery require deployment work and qualification. Do not expose graph/checkpointer internals, identity constructors, health callbacks, or adapter admission as public request inputs.
+The CLI uses OS identity and SQLite for a trusted local operator. PostgreSQL checkpoint support requires a dedicated restricted role and schema per tenant. An authenticated preparation HTTP API, database-backed organization roles, durable PostgreSQL worker queue, and PostgreSQL execution ledger are now implemented. Deploy the credential broker, egress enforcement, encrypted evidence retention, and operational recovery and qualify the full service before production use. Do not expose graph/checkpointer internals, identity constructors, health callbacks, or adapter admission as public request inputs.
+
+## Authenticated service
+
+The service validates pinned issuer/audience/signature/expiry, resolves organization roles from PostgreSQL, queues idempotent preparation and distinct-reviewer jobs, and exports verified artifacts. Uploaded inventory remains an unverified snapshot and cannot authorize execution. See [service provisioning, API and worker commands](docs/service-deployment.md). Cloud execution has no HTTP route.
 
 ## Verify and qualify
 
@@ -61,7 +65,7 @@ The CLI uses OS identity and SQLite for a trusted local operator. PostgreSQL che
 .venv/bin/pytest
 ```
 
-Two integration tests opt into real dependencies through `INFRA_RUNNER_IMAGE` and `INFRA_TEST_POSTGRES_DSN`; absent dependencies are skipped, not passed. GitHub CI supplies the pinned compiler image and disposable PostgreSQL. For local integration, `scripts/qualify_local.py --compiler-image IMMUTABLE_ID --postgres-image IMMUTABLE_ID` provisions and removes its own disposable database container. It never contacts AWS or a model provider.
+Integration campaigns opt into real dependencies through `INFRA_RUNNER_IMAGE` and `INFRA_TEST_POSTGRES_DSN`; absent dependencies are skipped, not passed. GitHub CI supplies the pinned compiler image and disposable PostgreSQL. For local integration, `scripts/qualify_local.py --compiler-image IMMUTABLE_ID --postgres-image IMMUTABLE_ID` provisions and removes its own disposable database container. It never contacts AWS or a model provider.
 
 The original `infra-migration-demo` remains a synthetic assessment/control fixture with explicit zero live calls and writes. Terraform, Bicep, Azure, GCP, and broader resource families remain extension targets.
 

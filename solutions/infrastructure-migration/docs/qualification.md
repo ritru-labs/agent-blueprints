@@ -45,4 +45,6 @@ Record immutable source commit and artifact tree, dependency and provider versio
 
 The suite separates local control tests from opt-in real Docker and PostgreSQL integration tests. CI supplies both real dependencies. Live-model, cloud, sandbox security, pilot and production campaigns must each have their own results. An unavailable platform is untested, not passed.
 
-Implementation does not satisfy milestone exit conditions: the hosted authenticated API, production approval persistence, deployed broker and egress controls, full inventory coverage, live adoption and transfer recovery, and operational acceptance remain pending. Each adapter must be admitted administratively only after independent evidence review. Credentials alone do not establish production readiness.
+Implementation does not satisfy milestone exit conditions: live identity-provider interoperability, deployed/operationally qualified approval persistence, broker and egress controls, full inventory coverage, live adoption and transfer recovery, and operational acceptance remain pending. Each adapter must be admitted administratively only after independent evidence review. Credentials alone do not establish production readiness.
+
+The authenticated preparation API, tenant membership storage, worker leases, and PostgreSQL ledger now have implementation and dedicated test campaigns. Hosted deployment, identity-provider interoperability, operator dashboard, production operations, and connection to qualified cloud execution remain separate acceptance gates.

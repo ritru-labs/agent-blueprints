@@ -7,7 +7,7 @@ name = "infrastructure-migration-blueprint"
 version = "0.1.0"
 description = "Governed LangGraph infrastructure migration workflow and governed execution adapters"
 requires-python = ">=3.11"
-dependencies = ["langgraph>=1.0,<2", "langgraph-checkpoint-sqlite>=3,<4", "pydantic>=2.10,<3", "boto3>=1.40,<2", "langchain-openai>=1,<2", "langgraph-checkpoint-postgres>=3,<4", "psycopg[binary]>=3.2,<4"]
+dependencies = ["langgraph>=1.0,<2", "langgraph-checkpoint-sqlite>=3,<4", "pydantic>=2.10,<3", "boto3>=1.40,<2", "langchain-openai>=1,<2", "langgraph-checkpoint-postgres>=3,<4", "psycopg[binary]>=3.2,<4", "fastapi>=0.115,<1", "uvicorn>=0.35,<1", "PyJWT[crypto]>=2.10,<3"]
 
 [project.optional-dependencies]
 dev = ["pytest>=8,<10", "ruff>=0.12,<1"]
@@ -15,6 +15,7 @@ dev = ["pytest>=8,<10", "ruff>=0.12,<1"]
 [project.scripts]
 infra-migration-demo = "infra_migration.demo:main"
 infra-migration = "infra_migration.cli:main"
+infra-migration-service = "infra_migration.service.launcher:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
