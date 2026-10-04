@@ -149,6 +149,15 @@ def test_authenticated_api_worker_restart_review_and_artifact_export(stores, sig
     assert client.get(other_url, headers=headers).status_code == 403
     registry.directory(store.tenant_id, UUID(run)).joinpath("index.ts").write_text("tampered")
     assert client.get(base + "/" + run + "/artifacts", headers=headers).status_code == 403
+    manifest = registry.directory(store.tenant_id, UUID(run)) / "bundle.json"
+    manifest.write_text("customer-private-malformed-document")
+    malformed = client.get(base + "/" + run + "/artifacts", headers=headers)
+    assert malformed.status_code == 403 and "customer-private" not in malformed.text
+    manifest.unlink()
+    outside = tmp_path / "private.txt"
+    outside.write_text("customer-private-outside-artifact-root")
+    manifest.symlink_to(outside)
+    assert client.get(base + "/" + run + "/artifacts", headers=headers).status_code == 403
 
 
 def test_postgres_queue_claim_fencing_cancellation_and_membership_revocation(stores):

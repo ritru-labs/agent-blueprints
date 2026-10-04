@@ -163,7 +163,15 @@ def create_app(verifier, registry: Registry):
         if job["status"] not in {"AWAITING_REVIEW", "REVIEWED_EXECUTION_BLOCKED", "REJECTED"}:
             raise AccessDenied("Artifacts are unavailable at this stage")
         directory = registry.directory(tenant, run)
-        bundle = ProjectBundle.model_validate_json((directory / "bundle.json").read_text())
+        manifest = directory / "bundle.json"
+        if directory.is_symlink() or manifest.is_symlink():
+            raise AccessDenied("Artifact links are not permitted")
+        try:
+            if manifest.stat().st_size > 32_000_000:
+                raise AccessDenied("Artifact manifest exceeds budget")
+            bundle = ProjectBundle.model_validate_json(manifest.read_text())
+        except (OSError, ValueError):
+            raise AccessDenied("Artifact manifest is invalid or unavailable") from None
         if bundle.artifact_digest != job["result"]["artifact_digest"]:
             raise AccessDenied("Artifact digest changed")
         verify_bundle_directory(bundle, directory)
