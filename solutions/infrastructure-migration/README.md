@@ -57,6 +57,10 @@ The CLI uses OS identity and SQLite for a trusted local operator. PostgreSQL che
 
 The service validates pinned issuer/audience/signature/expiry, resolves organization roles from PostgreSQL, queues idempotent preparation and distinct-reviewer jobs, and exports verified artifacts. Uploaded inventory remains an unverified snapshot and cannot authorize execution. See [service provisioning, API and worker commands](docs/service-deployment.md). Cloud execution has no HTTP route.
 
+## Operator dashboard
+
+Open the service root for snapshot upload, resource selection, real run tracking, verified code previews/downloads, and distinct-reviewer decisions. Sessions use memory-only access tokens; browser SSO login remains pending. See [dashboard operation and browser qualification](docs/dashboard.md).
+
 ## Verify and qualify
 
 ```sh

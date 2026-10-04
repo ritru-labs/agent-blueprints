@@ -18,6 +18,10 @@ infra-migration-service --config /trusted/service-config.json worker --once
 
 Bootstrap creates tenant tables and applies explicitly configured memberships. It cannot create database roles, schemas, cloud permissions, or identity accounts. To revoke a member, configure `active: false` and rerun bootstrap; removing an entry alone is not revocation. There is no public membership administration route. Run `worker` without `--once` only as an explicitly deployed managed service. Deployment configuration can optionally select an immutable compiler image, approved model endpoint/model, and official-document retrieval; all are absent by default.
 
+## Browser dashboard
+
+Open `/` on the running service to use the operator dashboard. Organization UUID and approved short-lived access token connect a memory-only browser session. Snapshot preparation, run tracking, code review, download, rejection/approval and cancellation use the existing authenticated API. See [dashboard operation](dashboard.md); browser SSO redirect/login remains pending.
+
 ## API workflow
 
 All organization routes require `Authorization: Bearer <access token>`. Do not put tokens in URLs. Access logs are disabled; TLS termination, request-header redaction and ingress controls are deployment responsibilities.
@@ -25,7 +29,10 @@ All organization routes require `Authorization: Bearer <access token>`. Do not p
 | Route | Behavior |
 | --- | --- |
 | `POST /v1/organizations/{tenant}/runs` | Assessor submits an inventory snapshot, resource IDs and UUID idempotency key; returns a queued run |
+| `GET /v1/organizations/{tenant}/session` | Active member reads server-granted roles and provisioned scope |
+| `GET /v1/organizations/{tenant}/runs` | Member reads cursor-paginated run summaries |
 | `GET /v1/organizations/{tenant}/runs/{run}` | Active organization member reads status, blockers, checks and review digest |
+| `GET /v1/organizations/{tenant}/runs/{run}/artifacts/preview` | Member reads a bounded named file from the exact verified bundle |
 | `GET /v1/organizations/{tenant}/runs/{run}/artifacts` | Member downloads the exact verified project ZIP after preparation |
 | `POST /v1/organizations/{tenant}/runs/{run}/review` | Distinct reviewer submits `plan_digest` and `acknowledged`; queues durable review |
 | `POST /v1/organizations/{tenant}/runs/{run}/cancel` | Requester cancels queued or awaiting-review preparation |
@@ -41,6 +48,6 @@ Requests are limited to 1 MB including streamed bodies, active organization work
 
 ## Deployment acceptance still required
 
-Configure TLS, approved identity-provider access tokens and key rotation, database transport encryption and backups, artifact-volume encryption and retention, ingress timeouts/rate limits, least-privilege runtime identities, managed worker restart, monitoring, alerting and restore tests. PostgreSQL and filesystem administrators can alter records; this implementation does not provide tamper-proof audit storage. Connection pooling, high-availability deployment, live identity-provider interoperability, browser dashboard/login, real cloud orchestration, and operational acceptance remain pending. Do not label a passing local/CI service campaign as customer production acceptance.
+Configure TLS, approved identity-provider access tokens and key rotation, database transport encryption and backups, artifact-volume encryption and retention, ingress timeouts/rate limits, least-privilege runtime identities, managed worker restart, monitoring, alerting and restore tests. PostgreSQL and filesystem administrators can alter records; this implementation does not provide tamper-proof audit storage. Connection pooling, high-availability deployment, live identity-provider interoperability, browser identity-provider login, real cloud orchestration, and operational acceptance remain pending. Do not label a passing local/CI service campaign as customer production acceptance.
 
 Authentication implementation follows the [PyJWT validation API](https://pyjwt.readthedocs.io/en/latest/api.html); HTTP security and request testing use [FastAPI security](https://fastapi.tiangolo.com/reference/security/) and [TestClient](https://fastapi.tiangolo.com/reference/testclient/).

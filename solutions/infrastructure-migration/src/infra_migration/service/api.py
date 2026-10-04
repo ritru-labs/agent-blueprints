@@ -4,10 +4,11 @@ import asyncio
 import io
 import json
 import zipfile
+from importlib.resources import files
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, Response
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -75,12 +76,32 @@ class BodyLimit:
         await self.app(scope, limited_receive, send)
 
 
-def public_job(row):
+def public_job(row, principal=None, *, details=True):
+    result = row["result"]
+    if result is not None and not details:
+        result = {
+            "resource_count": len(result.get("resource_ids", [])),
+            "blocker_count": len(result.get("blockers", [])),
+            "compile_passed": result.get("compile", {}).get("passed") is True,
+        }
     return {
         "run_id": str(row["id"]),
         "status": row["status"],
-        "result": row["result"],
+        "result": result,
         "execution_enabled": False,
+        "created_at": row["created_at"].isoformat() if row.get("created_at") else None,
+        "can_review": bool(
+            principal
+            and "reviewer" in principal.roles
+            and row["requester"] != principal.subject
+            and row["status"] == "AWAITING_REVIEW"
+        ),
+        "can_cancel": bool(
+            principal
+            and "assessor" in principal.roles
+            and row["requester"] == principal.subject
+            and row["status"] in {"QUEUED", "AWAITING_REVIEW"}
+        ),
     }
 
 
@@ -122,6 +143,51 @@ def create_app(verifier, registry: Registry):
     def health():
         return {"status": "alive", "cloud_execution": "disabled"}
 
+    @app.get("/", include_in_schema=False)
+    def dashboard():
+        return Response(
+            files("infra_migration.service").joinpath("dashboard/index.html").read_bytes(),
+            media_type="text/html",
+        )
+
+    @app.get("/favicon.ico", include_in_schema=False)
+    def favicon():
+        return Response(status_code=204)
+
+    @app.get("/dashboard/{asset}", include_in_schema=False)
+    def dashboard_asset(asset: str):
+        if asset not in {"app.js", "style.css"}:
+            raise HTTPException(404, "Asset unavailable")
+        media = "text/javascript" if asset == "app.js" else "text/css"
+        return Response(
+            files("infra_migration.service").joinpath("dashboard", asset).read_bytes(),
+            media_type=media,
+        )
+
+    @app.get("/v1/organizations/{tenant}/session")
+    def session(context: Annotated[tuple, Depends(authorized)]):
+        runtime, principal = context
+        return {
+            "organization_id": str(principal.tenant_id),
+            "roles": list(principal.roles),
+            "accounts": sorted(runtime.accounts),
+            "regions": sorted(runtime.regions),
+            "execution_enabled": False,
+        }
+
+    @app.get("/v1/organizations/{tenant}/runs")
+    def list_runs(
+        context: Annotated[tuple, Depends(authorized)],
+        before: UUID | None = None,
+        limit: Annotated[int, Query(ge=1, le=50)] = 25,
+    ):
+        runtime, principal = context
+        rows, cursor = runtime.store.list_runs(principal, before=before, limit=limit)
+        return {
+            "runs": [public_job(r, principal, details=False) for r in rows],
+            "next_cursor": str(cursor) if cursor else None,
+        }
+
     @app.post("/v1/organizations/{tenant}/runs", status_code=202)
     def prepare(body: PrepareRequest, context: Annotated[tuple, Depends(authorized)]):
         runtime, principal = context
@@ -137,12 +203,14 @@ def create_app(verifier, registry: Registry):
             "inventory": body.inventory.model_dump(mode="json"),
             "resource_ids": list(body.resource_ids),
         }
-        return public_job(runtime.store.enqueue(principal, payload, body.idempotency_key))
+        return public_job(
+            runtime.store.enqueue(principal, payload, body.idempotency_key), principal
+        )
 
     @app.get("/v1/organizations/{tenant}/runs/{run}")
     def get_run(run: UUID, context: Annotated[tuple, Depends(authorized)]):
         runtime, principal = context
-        return public_job(runtime.store.get(principal, run))
+        return public_job(runtime.store.get(principal, run), principal)
 
     @app.post("/v1/organizations/{tenant}/runs/{run}/review", status_code=202)
     def review(run: UUID, body: ReviewDecision, context: Annotated[tuple, Depends(authorized)]):
@@ -156,8 +224,7 @@ def create_app(verifier, registry: Registry):
         runtime.store.cancel(principal, run)
         return {"status": "CANCELLED", "execution_enabled": False}
 
-    @app.get("/v1/organizations/{tenant}/runs/{run}/artifacts")
-    def artifacts(tenant: UUID, run: UUID, context: Annotated[tuple, Depends(authorized)]):
+    def verified_artifact(tenant, run, context):
         runtime, principal = context
         job = runtime.store.get(principal, run)
         if job["status"] not in {"AWAITING_REVIEW", "REVIEWED_EXECUTION_BLOCKED", "REJECTED"}:
@@ -177,6 +244,28 @@ def create_app(verifier, registry: Registry):
         verify_bundle_directory(bundle, directory)
         if sum(len(v.encode()) for v in bundle.files.values()) > 16_000_000:
             raise AccessDenied("Artifact export exceeds budget")
+        return bundle
+
+    @app.get("/v1/organizations/{tenant}/runs/{run}/artifacts/preview")
+    def artifact_preview(
+        tenant: UUID,
+        run: UUID,
+        context: Annotated[tuple, Depends(authorized)],
+        file: Annotated[str, Query(max_length=64)] = "index.ts",
+    ):
+        bundle = verified_artifact(tenant, run, context)
+        if file not in bundle.files or len(bundle.files[file].encode()) > 2_000_000:
+            raise AccessDenied("Preview file unavailable or exceeds budget")
+        return {
+            "artifact_digest": bundle.artifact_digest,
+            "files": sorted(bundle.files),
+            "file": file,
+            "content": bundle.files[file],
+        }
+
+    @app.get("/v1/organizations/{tenant}/runs/{run}/artifacts")
+    def artifacts(tenant: UUID, run: UUID, context: Annotated[tuple, Depends(authorized)]):
+        bundle = verified_artifact(tenant, run, context)
         buffer = io.BytesIO()
         with zipfile.ZipFile(buffer, "w", compression=zipfile.ZIP_DEFLATED) as archive:
             for name, content in bundle.files.items():
@@ -196,6 +285,12 @@ def create_app(verifier, registry: Registry):
         response = await call_next(request)
         response.headers["Cache-Control"] = "no-store"
         response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["Content-Security-Policy"] = (
+            "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; "
+            "img-src 'self'; font-src 'self'; frame-ancestors 'none'; base-uri 'none'; "
+            "form-action 'self'; object-src 'none'"
+        )
+        response.headers["Referrer-Policy"] = "no-referrer"
         return response
 
     return app

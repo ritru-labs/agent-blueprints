@@ -10,3 +10,4 @@ __pycache__/
 *.sqlite-wal
 demo-report.json
 runner/node_modules/
+browser-evidence/

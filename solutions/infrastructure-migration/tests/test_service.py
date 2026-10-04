@@ -98,7 +98,7 @@ class ApiStore:
         if "assessor" not in principal.roles:
             raise AccessDenied("Assessor required")
         self.payloads.append(payload)
-        return {"id": uuid4(), "status": "QUEUED", "result": None}
+        return {"id": uuid4(), "requester": principal.subject, "status": "QUEUED", "result": None}
 
     def review(self, principal, run, decision):
         if "reviewer" not in principal.roles:
@@ -179,3 +179,22 @@ def test_registry_denies_shared_account_or_overlapping_artifacts(tmp_path):
     )
     with pytest.raises(ValueError, match="disjoint"):
         Registry({a: first, b: overlap})
+
+
+def test_dashboard_assets_csp_and_session_permissions(signing, tmp_path):
+    client, store, _, headers = api_fixture(signing, tmp_path)
+    response = client.get("/")
+    assert response.status_code == 200
+    assert "Migration workspace" in response.text
+    assert "script-src 'self'" in response.headers["content-security-policy"]
+    assert "frame-ancestors 'none'" in response.headers["content-security-policy"]
+    assert response.headers["cache-control"] == "no-store"
+    for asset in ("app.js", "style.css"):
+        assert client.get("/dashboard/" + asset).status_code == 200
+    assert client.get("/dashboard/private.txt").status_code == 404
+    script = client.get("/dashboard/app.js").text
+    assert "localStorage" not in script and "sessionStorage" not in script
+    assert ".innerHTML" not in script
+    route = f"/v1/organizations/{store.tenant_id}/session"
+    assert client.get(route).status_code == 401
+    assert client.get(route, headers=headers).json()["roles"] == ["assessor"]

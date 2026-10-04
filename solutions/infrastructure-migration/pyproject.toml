@@ -10,7 +10,7 @@ requires-python = ">=3.11"
 dependencies = ["langgraph>=1.0,<2", "langgraph-checkpoint-sqlite>=3,<4", "pydantic>=2.10,<3", "boto3>=1.40,<2", "langchain-openai>=1,<2", "langgraph-checkpoint-postgres>=3,<4", "psycopg[binary]>=3.2,<4", "fastapi>=0.115,<1", "uvicorn>=0.35,<1", "PyJWT[crypto]>=2.10,<3"]
 
 [project.optional-dependencies]
-dev = ["pytest>=8,<10", "ruff>=0.12,<1"]
+dev = ["pytest>=8,<10", "ruff>=0.12,<1", "playwright>=1.56,<2"]
 
 [project.scripts]
 infra-migration-demo = "infra_migration.demo:main"
@@ -19,6 +19,9 @@ infra-migration-service = "infra_migration.service.launcher:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+"infra_migration.service" = ["dashboard/*.html", "dashboard/*.css", "dashboard/*.js"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

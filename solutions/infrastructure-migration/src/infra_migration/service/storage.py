@@ -23,6 +23,7 @@ CREATE TABLE IF NOT EXISTS service_jobs (
  lease UUID, lease_until TIMESTAMPTZ, attempts INTEGER NOT NULL DEFAULT 0,
  created_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp(),
  UNIQUE(requester,idempotency_key));
+CREATE INDEX IF NOT EXISTS service_jobs_created_idx ON service_jobs(created_at DESC,id DESC);
 CREATE TABLE IF NOT EXISTS service_approvals (
  id TEXT PRIMARY KEY, binding_digest TEXT NOT NULL, approver TEXT NOT NULL,
  expires BIGINT NOT NULL, consumed BOOLEAN NOT NULL DEFAULT FALSE);
@@ -118,6 +119,30 @@ class TenantStore:
         if not row:
             raise AccessDenied("Run unavailable")
         return row
+
+    def list_runs(self, principal, *, before=None, limit=25):
+        self._authorized(principal)
+        if not 1 <= limit <= 50:
+            raise ValueError("Run page size outside budget")
+        with self.connection() as db:
+            params = []
+            condition = ""
+            if before is not None:
+                cursor = db.execute(
+                    "SELECT created_at,id FROM service_jobs WHERE id=%s", (before,)
+                ).fetchone()
+                if not cursor:
+                    raise AccessDenied("Run cursor unavailable")
+                condition = "WHERE (created_at,id) < (%s,%s) "
+                params.extend([cursor["created_at"], cursor["id"]])
+            params.append(limit + 1)
+            rows = db.execute(
+                "SELECT id,requester,status,result,created_at FROM service_jobs "
+                + condition
+                + "ORDER BY created_at DESC,id DESC LIMIT %s",
+                params,
+            ).fetchall()
+        return rows[:limit], rows[limit - 1]["id"] if len(rows) > limit else None
 
     def review(self, principal, job, decision):
         self._authorized(principal, "reviewer")

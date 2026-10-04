@@ -47,4 +47,6 @@ The suite separates local control tests from opt-in real Docker and PostgreSQL i
 
 Implementation does not satisfy milestone exit conditions: live identity-provider interoperability, deployed/operationally qualified approval persistence, broker and egress controls, full inventory coverage, live adoption and transfer recovery, and operational acceptance remain pending. Each adapter must be admitted administratively only after independent evidence review. Credentials alone do not establish production readiness.
 
-The authenticated preparation API, tenant membership storage, worker leases, and PostgreSQL ledger now have implementation and dedicated test campaigns. Hosted deployment, identity-provider interoperability, operator dashboard, production operations, and connection to qualified cloud execution remain separate acceptance gates.
+The authenticated preparation API, tenant membership storage, worker leases, and PostgreSQL ledger now have implementation and dedicated test campaigns. Hosted deployment, identity-provider interoperability, customer dashboard acceptance, browser identity-provider login, production operations, and connection to qualified cloud execution remain separate acceptance gates.
+
+The dashboard is implemented and has a dedicated real Chromium/API/PostgreSQL/LangGraph campaign. Browser SSO login, customer usability/accessibility acceptance, deployment and live cloud qualification remain pending.

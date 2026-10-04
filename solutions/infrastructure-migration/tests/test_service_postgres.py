@@ -273,3 +273,68 @@ def test_postgres_expiry_bound_receipts_budget_and_revoked_roles(stores):
     store.provision_member(worker.subject, ("assessor",))
     with pytest.raises(AccessDenied):
         ledger.read(worker, operation)
+
+
+def test_dashboard_run_pagination_permissions_and_scoped_preview(stores, signing, tmp_path):
+    store, other = stores
+    inventory = scoped_inventory(store)
+    registry = Registry(
+        {
+            store.tenant_id: TenantRuntime(
+                store,
+                frozenset([inventory.scope.account_id]),
+                frozenset(inventory.scope.regions),
+                tmp_path / "a",
+            ),
+            other.tenant_id: TenantRuntime(
+                other,
+                frozenset(["999999999999"]),
+                frozenset(inventory.scope.regions),
+                tmp_path / "b",
+            ),
+        }
+    )
+    client = TestClient(create_app(JwtVerifier(ISSUER, AUDIENCE, signing[1]), registry))
+    requester = store.principal(actor_id(ISSUER, "requester"))
+    payload = {
+        "inventory": inventory.model_dump(mode="json"),
+        "resource_ids": ["vpc-fixture", "subnet-fixture"],
+    }
+    for _ in range(4):
+        store.enqueue(requester, payload, uuid4())
+    base = f"/v1/organizations/{store.tenant_id}/runs"
+    headers = {"Authorization": "Bearer " + access_token(signing[0])}
+    first = client.get(base + "?limit=2", headers=headers).json()
+    second = client.get(base + "?limit=2&before=" + first["next_cursor"], headers=headers).json()
+    assert len(first["runs"]) == len(second["runs"]) == 2
+    assert second["next_cursor"] is None
+    assert not set(r["run_id"] for r in first["runs"]) & set(r["run_id"] for r in second["runs"])
+    assert client.get(base + "?limit=51", headers=headers).status_code == 422
+    assert client.get(base + "?before=" + str(uuid4()), headers=headers).status_code == 403
+    PreparationWorker(registry).once(store.tenant_id)
+    row = store.list_runs(requester, limit=10)[0]
+    ready = next(r for r in row if r["status"] == "AWAITING_REVIEW")
+    run = str(ready["id"])
+    assert client.get(base + "/" + run, headers=headers).json()["can_review"] is False
+    reviewer_headers = {"Authorization": "Bearer " + access_token(signing[0], "reviewer")}
+    assert client.get(base + "/" + run, headers=reviewer_headers).json()["can_review"] is True
+    response = client.get(base + "/" + run + "/artifacts/preview", headers=headers)
+    assert response.status_code == 200
+    assert "aws.ec2.Vpc" in response.json()["content"]
+    assert "expected-inputs.json" in response.json()["files"]
+    assert (
+        client.get(
+            base + "/" + run + "/artifacts/preview?file=../../private", headers=headers
+        ).status_code
+        == 403
+    )
+    assert client.get(base, headers=headers).json()["runs"][0]["result"] is None
+    assert "resource_ids" not in next(
+        r["result"] for r in client.get(base, headers=headers).json()["runs"] if r["result"]
+    )
+    assert (
+        client.get(
+            f"/v1/organizations/{other.tenant_id}/runs/{run}/artifacts/preview", headers=headers
+        ).status_code
+        == 403
+    )
