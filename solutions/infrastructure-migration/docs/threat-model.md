@@ -18,7 +18,7 @@ Protect cloud resources, tenant data, credentials, configuration integrity, mana
 
 ## Current limits
 
-Local tests exercise selected authorization and assessment boundaries. They do not establish sandbox containment, authenticated enterprise identity, database tenant isolation, credential safety, cloud recovery, or provider parity. SQLite is controlled by the local operator. No public API should expose this foundation as a production service.
+Control tests exercise scope, approval consumption and expiry, resource locking, unknown outcomes, artifact integrity, bounded parsing, model minimization, and drift. Separate real Docker compilation and PostgreSQL role/schema restart tests exercise their exact local dependency contracts. These do not establish comprehensive sandbox containment, hosted enterprise authentication, deployed credential safety, live cloud recovery, or provider parity. SQLite is controlled by the local operator. Production deployment requires independently qualified service boundaries.
 
 ## Review before a pilot
 

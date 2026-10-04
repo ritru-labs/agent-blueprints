@@ -8,7 +8,7 @@ from datetime import datetime
 from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, JsonValue, model_validator
 
 
 class Contract(BaseModel):
@@ -36,7 +36,7 @@ class Principal(Contract):
 
     tenant_id: UUID
     subject: str = Field(min_length=1)
-    roles: tuple[Literal["assessor", "reviewer"], ...]
+    roles: tuple[Literal["assessor", "reviewer", "executor"], ...]
 
 
 class Resource(Contract):
@@ -46,11 +46,13 @@ class Resource(Contract):
     region: str = Field(min_length=1)
     owner: Literal["manual", "cloudformation", "unknown"]
     dependencies: tuple[str, ...] = ()
+    configuration: dict[str, JsonValue] = Field(default_factory=dict)
+    blockers: tuple[str, ...] = ()
 
 
 class Inventory(Contract):
     scope: Scope
-    provenance: Literal["synthetic_fixture"]
+    provenance: Literal["synthetic_fixture", "aws_api"]
     observed_at: datetime
     coverage: Literal["complete_fixture", "partial"]
     gaps: tuple[str, ...] = ()

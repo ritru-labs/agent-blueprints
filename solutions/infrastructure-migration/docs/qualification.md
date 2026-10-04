@@ -1,6 +1,6 @@
 # Infrastructure migration qualification plan
 
-Production grade is an acceptance status that requires exact-source evidence. This repository currently implements a synthetic assessment foundation. All live execution adapters remain unqualified and disabled.
+Production grade is an acceptance status that requires exact-source evidence. This repository implements a preparation graph, scoped reader, optional model reviewer, deterministic generator, isolated compiler, and gated execution adapters. All live execution adapters remain unqualified and disabled.
 
 ## Implementation milestones
 
@@ -20,7 +20,7 @@ Complete each exit condition before enabling the next privilege level. Future pr
 
 | Resource group | Discovery now | Mapping now | Live adoption |
 | --- | --- | --- | --- |
-| AWS VPC and subnet | Synthetic metadata | Candidate type tokens | Disabled; first proposed qualification targets |
+| AWS VPC and subnet | Bounded AWS API configuration reads; partial coverage | Deterministic IPv4 subset code and import manifests | Implemented adapter, disabled and live-unqualified |
 | AWS security group and S3 bucket | Synthetic metadata | Candidate type tokens | Disabled; configuration subresources need their own qualification |
 | IAM, KMS, databases and service-managed resources | None | None | Disabled |
 | CloudFormation nested stacks, custom resources and exports | None | None | Disabled |
@@ -43,4 +43,6 @@ Complete each exit condition before enabling the next privilege level. Future pr
 
 Record immutable source commit and artifact tree, dependency and provider versions, environment identity, fixture or cloud account scope, configuration baselines, tool invocations and receipts, approval references, operation journal, previews, physical IDs, ownership checks, application health, recovery outcomes, and unresolved gaps. Use execution-backed criterion mappings rather than assigning every test to every requirement. Redact secrets before retention or publication.
 
-The current local suite is foundation evidence only. Live-model, cloud, sandbox, PostgreSQL, pilot and production campaigns must each have their own results. An unavailable platform is untested, not passed.
+The suite separates local control tests from opt-in real Docker and PostgreSQL integration tests. CI supplies both real dependencies. Live-model, cloud, sandbox security, pilot and production campaigns must each have their own results. An unavailable platform is untested, not passed.
+
+Implementation does not satisfy milestone exit conditions: the hosted authenticated API, production approval persistence, deployed broker and egress controls, full inventory coverage, live adoption and transfer recovery, and operational acceptance remain pending. Each adapter must be admitted administratively only after independent evidence review. Credentials alone do not establish production readiness.

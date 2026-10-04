@@ -36,7 +36,7 @@ def assess(inventory: Inventory) -> AssessmentPlan:
     if not inventory.resources:
         blockers.append("EMPTY_INVENTORY_REQUIRES_REVIEW")
     for resource in sorted(inventory.resources, key=lambda r: r.resource_id):
-        reasons = []
+        reasons = list(resource.blockers)
         target = CANDIDATES.get(resource.resource_type)
         if target is None:
             reasons.append("UNSUPPORTED_RESOURCE_TYPE")

@@ -1,6 +1,6 @@
 # Infrastructure migration and recovery runbooks
 
-These procedures define target behavior. Live tooling is not implemented. Do not execute the conceptual steps against customer infrastructure through this foundation.
+Execution adapters are implemented but have not passed live cloud acceptance. Follow these procedures only after exact-adapter qualification and authenticated, scoped authorization. Preparation and proposal CLI commands perform no cloud writes.
 
 ## Manual infrastructure adoption
 

@@ -1,14 +1,14 @@
 # Tool contracts and permissions
 
-The tool gateway is an application boundary. The current runtime accepts only `read_inventory` on a synthetic fixture. Known privileged tools fail closed; unknown names and extra schema fields are rejected. There is no arbitrary shell tool or model-generated permission flag.
+The tool gateway is an application boundary. The fixture gateway accepts only `read_inventory` on synthetic provenance. The separate AWS reader requires an explicit session and scope, verifies STS account identity, and bounds read calls. Known privileged tools fail closed; unknown names and extra schema fields are rejected. There is no arbitrary shell tool or model-generated permission flag.
 
 ## Current contracts
 
-`ToolRequest` binds the tool name, exact tenant/run/cloud/account/regions/workflow/target scope, and bounded request ID. `Principal` is trusted authentication context. `Inventory` admits only typed resource metadata and marks synthetic provenance. Responses have an output digest receipt. This local receipt is not a signed production execution record.
+`ToolRequest` binds the tool name, exact tenant/run/cloud/account/regions/workflow/target scope, and bounded request ID. `Principal` is trusted authentication context. `Inventory` includes typed configuration, blockers, and explicit synthetic or AWS API provenance. Responses have an output digest receipt. This local receipt is not a signed production execution record.
 
-All current fixture reads must match the bound inventory scope and assessor role. Cloud writes are denied even if a caller acknowledges a plan. The runner has no cloud adapter or model integration. SQLite stores local graph state; users with filesystem access can change it, so it is unsuitable as a hostile multi-tenant security boundary.
+All current fixture reads must match the bound inventory scope and assessor role. Cloud writes are denied even if a caller acknowledges a plan. Docker runners allow only enumerated compiler/Pulumi commands, immutable image IDs, bounded output, and explicitly leased credentials for read-only preview. The optional model reviewer receives aliases and type metadata, never cloud credentials or customer configuration. SQLite stores local graph state; users with filesystem access can change it, so it is unsuitable as a hostile multi-tenant security boundary.
 
-## Target tool registry
+## Tool registry and integration contracts
 
 | Tool | Input binding | Result | Permission and gate |
 | --- | --- | --- | --- |
@@ -32,4 +32,6 @@ The trusted gateway appends principal identity, tenant, run, scope, artifact dig
 
 Persist redacted invocation and result receipts outside the model context. An execution receipt binds request digest, operation ID, adapter digest, timestamps, provider IDs, exit status, output artifacts, and observed outcome. Reject mismatched, missing, stale, or duplicated evidence. Do not classify exit code zero alone as criterion satisfaction.
 
-Transport retries may be used for bounded safe reads. Writes require provider idempotency or reconciliation; a timeout is not evidence that nothing happened. Support `OUTCOME_UNKNOWN` explicitly. Use subprocess argument arrays in future runners, never interpolated shell text from prompts.
+Transport retries may be used for bounded safe reads. Writes require provider idempotency or reconciliation; a timeout is not evidence that nothing happened. Support `OUTCOME_UNKNOWN` explicitly. Use subprocess argument arrays in runners, never interpolated shell text from prompts.
+
+Implemented modules: `discovery` (AWS reads), `source` (safe bounded template parsing), `reasoning` (fixed official URLs and typed model review), `generation` (VPC/subnet code and manifests), `runner` (compile/export/import/preview), `execution` and `ledger` (approval, locks, journal), `pulumi_adapter` (protected import and parity), `cloudformation_adapter` (retention/release change sets), and `credentials` (scoped read leases). Provider mappings are pinned in code; generic runtime schema lookup and arbitrary framework conversion are not implemented. Adapter callbacks and qualified-adapter configuration belong to trusted services, never public tool arguments.

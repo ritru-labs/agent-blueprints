@@ -1,31 +1,59 @@
-# LangGraph infrastructure migration blueprint
+# LangGraph infrastructure migration agent
 
-This blueprint establishes the governed foundation for AWS infrastructure adoption and CloudFormation-to-Pulumi migration. The intended product discovers existing infrastructure, evaluates migration feasibility, generates target code, and transfers management through controlled, verified steps.
+This solution prepares infrastructure migration packages and implements governed ownership transfer to Pulumi. The main LangGraph workflow performs discovery, assessment, optional model review, deterministic code generation, isolated compilation, and durable package review. Separate execution adapters require exact approvals, resource locks, drift checks, and operation reconciliation.
 
-**Current capability:** a runnable LangGraph assessment of synthetic resource metadata, application-side tool restrictions, durable local checkpoint recovery, and exact-plan review acknowledgement. Live AWS discovery, language-model reasoning, Pulumi code generation and preview, imports, and ownership transfers are not implemented. Production use is not qualified.
+**Implemented scope:** AWS IPv4 VPCs and subnets, bounded AWS reads, safe CloudFormation parsing and retention/release proposals, typed model review using official documentation, Pulumi TypeScript generation, Docker verification, PostgreSQL checkpoints, protected imports, and CloudFormation change-set adapters. Unsupported configurations remain blocked. Discovery explicitly reports partial coverage. Live cloud/model acceptance and production deployment are pending; the executor admits no adapters by default.
 
-## Run the assessment
+## Prepare without credentials
 
-Requires Python 3.11 or newer. Run from `solutions/infrastructure-migration`:
+Requires Python 3.11 or newer. From this directory:
 
 ```sh
 python -m venv .venv
 .venv/bin/python -m pip install -r requirements.lock
 .venv/bin/python -m pip install . --no-deps
-.venv/bin/infra-migration-demo --checkpoint demo.sqlite --output demo-report.json
+.venv/bin/infra-migration prepare \
+  --inventory examples/network-inventory.json \
+  --resource vpc-fixture --resource subnet-fixture \
+  --output generated-project --checkpoint preparation.sqlite
 ```
 
-The first run pauses at `AWAITING_REVIEW`. Restart the process and acknowledge that same assessment:
+This writes the project and pauses for review. Restart with the same arguments and add `--acknowledge-digest DIGEST_FROM_OUTPUT`. Acknowledgement records package review; it cannot enable execution. Without an image or model configuration, their receipts explicitly say they were not configured. After editing source, reinstall the package before testing.
+
+## Isolated compilation
+
+Build the pinned compiler image without customer credentials, resolve its immutable ID, then compile:
 
 ```sh
-.venv/bin/infra-migration-demo --checkpoint demo.sqlite --output demo-report.json --acknowledge
+docker build -t infra-migration-compile:local runner
+migration_image=$(docker image inspect infra-migration-compile:local --format '{{.Id}}')
+.venv/bin/infra-migration compile --project generated-project --runner-image "$migration_image"
 ```
 
-The final status is `REVIEWED_BLOCKED`: assessment acknowledged, execution disabled. The JSON report explicitly records zero live model calls, cloud calls, and resource writes. For the CloudFormation fixture use `--workflow cloudformation_migration` with a different checkpoint filename. Both examples contain unsupported resources and partial discovery so gaps remain visible.
+Compilation mounts the exact bundle read-only, disables network access, drops capabilities, bounds CPU/memory/output/time, and uses baked pinned dependencies. The optional Pulumi runner is built with `runner/Dockerfile.pulumi.amd64` or `.arm64` and `--build-arg COMPILE_IMAGE=IMMUTABLE_COMPILER_ID`; CLI and provider archives have fixed checksums. Preview/import require a separately qualified egress network, an explicit short-lived read credential lease, and a protected destination-state directory. A network name alone does not establish egress enforcement.
 
-SQLite is a local single-operator fixture store. It is not a tenant-isolated production service. The `Principal` class represents trusted authenticated context; the CLI supplies a synthetic principal. Do not expose constructors, the compiled graph, or the checkpointer as public API endpoints.
+## Scoped reads and model review
 
-## Validate changes
+After an AWS account/profile is explicitly authorized:
+
+```sh
+.venv/bin/infra-migration discover --scope examples/scope.json \
+  --profile APPROVED_PROFILE --output discovered-inventory.json --max-calls 200
+```
+
+The reader verifies the actual account with STS before EC2 reads. Untagged resources have unknown ownership; they are never automatically declared manual. Defaults, unsupported features, missing reads, and budget exhaustion stay visible. A snapshot supplied to `prepare` is operator input, not proof of live discovery.
+
+Optionally add `--model APPROVED_MODEL --official-docs` and an approved HTTPS `--model-base-url` to preparation. Configure credentials through the provider environment, never command arguments or repository files. The model receives resource aliases, types, ownership, dependencies, blockers, and fixed official-document excerpts. It receives no customer configuration, resource tags, account IDs, or cloud credentials. Typed output is advisory; call budgets persist and receipts retain hashes and usage without prompts or hidden reasoning.
+
+## Execution authority
+
+`Executor` has an empty qualified-adapter allowlist. A trusted administrator must independently qualify and admit each exact adapter version. Execution requires a distinct reviewer, a single-use expiring approval bound to artifacts/inventory/plan/state/scope, and an executor identity. It locks physical resources across runs, rechecks drift under lock, journals submission, and retains uncertain outcomes until read-only reconciliation. No CLI command bypasses these gates.
+
+`PulumiImportAdapter` validates protected physical IDs, provider account/region, expected configuration, a zero-change preview, and trusted health observations. `CloudFormationTransferAdapter` separates retention from release, verifies physical identity and freeze evidence, restricts change-set effects, and reconciles observed outcomes. Neither adapter has passed live cloud acceptance. Source re-adoption and universal rollback are not assumed.
+
+The CLI uses OS identity and SQLite for a trusted local operator. PostgreSQL checkpoint support requires a dedicated restricted role and schema per tenant. A hosted authenticated API, production approval storage, deployed credential broker, egress enforcement, encrypted evidence retention, and operational recovery require deployment work and qualification. Do not expose graph/checkpointer internals, identity constructors, health callbacks, or adapter admission as public request inputs.
+
+## Verify and qualify
 
 ```sh
 .venv/bin/ruff check .
@@ -33,17 +61,14 @@ SQLite is a local single-operator fixture store. It is not a tenant-isolated pro
 .venv/bin/pytest
 ```
 
-The suite exercises privileged-tool denial, tenant and account scope, resource identity validation, dependency gaps and cycles, durable restart, stale review decisions, role checks, and prevention of execution claims. These are local foundation tests, not live migration acceptance.
+Two integration tests opt into real dependencies through `INFRA_RUNNER_IMAGE` and `INFRA_TEST_POSTGRES_DSN`; absent dependencies are skipped, not passed. GitHub CI supplies the pinned compiler image and disposable PostgreSQL. For local integration, `scripts/qualify_local.py --compiler-image IMMUTABLE_ID --postgres-image IMMUTABLE_ID` provisions and removes its own disposable database container. It never contacts AWS or a model provider.
 
-## Design and delivery
+The original `infra-migration-demo` remains a synthetic assessment/control fixture with explicit zero live calls and writes. Terraform, Bicep, Azure, GCP, and broader resource families remain extension targets.
 
-- [Architecture and production controls](docs/architecture.md)
-- [Tool contracts and permissions](docs/tool-contracts.md)
+- [Architecture](docs/architecture.md)
+- [Tool contracts](docs/tool-contracts.md)
 - [Threat model](docs/threat-model.md)
-- [Qualification and implementation roadmap](docs/qualification.md)
-- [Migration and recovery runbooks](docs/runbooks.md)
-- [Agent instructions](AGENTS.md)
-
-Dependencies are pinned in `requirements.lock`. Review updates intentionally and rerun qualification; adapters must pin their provider schemas and CLI versions as well.
-
-After editing runtime code, reinstall the local package before validation. The test commands exercise the installed package, including its distributable layout.
+- [Qualification gates](docs/qualification.md)
+- [Migration/recovery runbooks](docs/runbooks.md)
+- [Operator handoff](docs/operator-handoff.md)
+- [Agent governance](AGENTS.md)

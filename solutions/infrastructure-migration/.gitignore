@@ -9,3 +9,4 @@ __pycache__/
 *.sqlite-shm
 *.sqlite-wal
 demo-report.json
+runner/node_modules/

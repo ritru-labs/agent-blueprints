@@ -1,6 +1,6 @@
 # Infrastructure migration architecture
 
-Status: production-oriented design with a local assessment foundation implemented. The first destination is Pulumi TypeScript on AWS. Manual adoption and CloudFormation migration share discovery and verification infrastructure but use separate ownership-transfer procedures. Terraform, Azure, GCP, Bicep, and cross-cloud relocation remain extension targets.
+Status: implemented preparation workflow and gated execution adapters; live acceptance and production deployment remain pending. The first destination is Pulumi TypeScript on AWS. Manual adoption and CloudFormation migration share discovery and verification infrastructure but use separate ownership-transfer procedures. Terraform, Azure, GCP, Bicep, and cross-cloud relocation remain extension targets.
 
 ## Product behavior
 
@@ -33,7 +33,7 @@ The proposed production stack is Python LangGraph, PostgreSQL for checkpoints an
 
 ## Graph responsibilities
 
-The implemented graph is `assess -> review interrupt -> reviewed blocked or rejected`. The authenticated facade collects fixture inventory through the tool gateway before starting the graph. Review resumes after checkpoint restoration and only acknowledges the exact assessment.
+The main implemented graph is `discover -> reason -> generate -> validate -> review interrupt`. Discovery uses an explicit approved AWS session or an operator snapshot. Optional model review cannot grant execution authority. Deterministic generation emits typed VPC/subnet configurations, manifests, and content digests. Docker validation compiles the exact bundle without network access. Review resumes after durable checkpoint restoration and acknowledges that package only. The smaller synthetic assessment demo remains available.
 
 The target graph adds discovery, normalization, dependency analysis, documentation retrieval, migration planning, target generation, validation, bounded repair, approval, drift recheck, execution, verification, and reconciliation subgraphs. These are specialized responsibilities within one product. The coordinator can schedule independent read-only tasks within budgets. External writes are serialized within each locked migration scope.
 
@@ -51,7 +51,7 @@ Default migration policy allows adoption only. Block unexpected create, update, 
 
 Normalize resources into a versioned canonical model containing identity, scope, ownership, configuration with secret references, dependencies, provenance, observation time, discovery coverage, and source-code correspondence. Framework adapters translate this model into destination code and management operations. Retain source-specific semantics; a lossy common representation cannot prove parity.
 
-Every adapter declares discovery coverage, property mappings, import lookup rules, provider version, unsupported features, replacement hazards, ownership-transfer stages, verification checks, and tested recovery. Current VPC, subnet, security-group, and bucket mappings are metadata candidates only. They do not represent complete configurations or qualified adoption support.
+Every adapter declares discovery coverage, property mappings, import lookup rules, provider version, unsupported features, replacement hazards, ownership-transfer stages, verification checks, and tested recovery. VPC and subnet readers and TypeScript generators support a bounded IPv4 subset and block unsupported configurations. Import and CloudFormation retention/release adapters implement journaled operations and read-only reconciliation, but remain unqualified. Security-group and bucket mappings are fixture metadata candidates only. Discovery always declares partial coverage.
 
 The first live qualification campaign should use small manual VPC and subnet fixtures, then a CloudFormation-managed equivalent. Add IAM, encryption keys, data stores, nested stacks, custom resources, and service-managed infrastructure only after their own acceptance campaigns. Cross-cloud relocation requires a separate design for data movement, cutover, and service equivalence.
 
@@ -76,3 +76,7 @@ Use redacted structured events with tenant, run, plan, and operation references.
 - [AWS discovery coverage](https://docs.aws.amazon.com/resource-explorer/latest/userguide/supported-resource-types.html) documents resource and permission limitations.
 
 These references support tool behavior. The service architecture and controls above are design decisions, not claims that providers implement them for this application.
+
+## Implemented deployment boundaries
+
+`LocalLedger` implements atomic approval consumption, resource locks, durable model budgets, and uncertain-operation recovery in SQLite for a trusted local operator. `Executor` admits no adapters by default, checks expiry again before submission, and rechecks drift while holding locks. PostgreSQL checkpointers require dedicated restricted tenant roles and schemas. These components do not constitute a hosted authenticated API or a production approval service. Runner network configuration, short-lived credential delivery, verified health callbacks, encrypted evidence storage, restore procedures, and administrative adapter admission require deployment qualification. See the operator handoff for executable commands and remaining acceptance gates.

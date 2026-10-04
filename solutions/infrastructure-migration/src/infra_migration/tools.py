@@ -32,6 +32,8 @@ class FixtureGateway:
     """Single-run synthetic adapter; fixtures cannot enable privileged tools."""
 
     def __init__(self, inventory: Inventory):
+        if inventory.provenance != "synthetic_fixture":
+            raise AccessDenied("Fixture gateway cannot impersonate a live cloud adapter")
         # Capture bytes so caller mutations cannot silently change the inventory.
         self._inventory = inventory.model_dump_json()
 

@@ -5,6 +5,6 @@ This repository contains independent enterprise agent solutions. Each solution d
 | Solution | Purpose | Included capability |
 | --- | --- | --- |
 | [Jira to PR](solutions/jira-to-pr/architecture/ADR-0001-phase-0.md) | Governed coding and draft PR delivery | Architecture document |
-| [Infrastructure migration](solutions/infrastructure-migration/README.md) | Governed AWS adoption and CloudFormation migration to Pulumi using LangGraph | Synthetic assessment foundation |
+| [Infrastructure migration](solutions/infrastructure-migration/README.md) | Governed AWS adoption and CloudFormation migration to Pulumi using LangGraph | AWS reader, model review, Pulumi generation, isolated validation, and gated execution adapters |
 
 Read each solution's instructions and acceptance status before enabling external integrations. Design documents and fixture tests do not establish production readiness.

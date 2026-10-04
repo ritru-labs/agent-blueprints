@@ -1,19 +1,20 @@
 [build-system]
-requires = ["setuptools>=75"]
+requires = ["setuptools==84.0.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "infrastructure-migration-blueprint"
 version = "0.1.0"
-description = "Governed LangGraph infrastructure migration assessment foundation"
+description = "Governed LangGraph infrastructure migration workflow and governed execution adapters"
 requires-python = ">=3.11"
-dependencies = ["langgraph>=1.0,<2", "langgraph-checkpoint-sqlite>=3,<4", "pydantic>=2.10,<3"]
+dependencies = ["langgraph>=1.0,<2", "langgraph-checkpoint-sqlite>=3,<4", "pydantic>=2.10,<3", "boto3>=1.40,<2", "langchain-openai>=1,<2", "langgraph-checkpoint-postgres>=3,<4", "psycopg[binary]>=3.2,<4"]
 
 [project.optional-dependencies]
 dev = ["pytest>=8,<10", "ruff>=0.12,<1"]
 
 [project.scripts]
 infra-migration-demo = "infra_migration.demo:main"
+infra-migration = "infra_migration.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
