@@ -181,7 +181,10 @@
     });
     const blockers = $("blockers"); blockers.replaceChildren();
     const explanations = { UNVERIFIED_OPERATOR_SNAPSHOT: "Uploaded inventory has not been verified against live AWS.",
-      SOURCE_NOT_FROZEN: "Source automation must be frozen before ownership transfer." };
+      SOURCE_NOT_FROZEN: "Source automation must be frozen before ownership transfer.",
+      LIVE_ADAPTERS_NOT_QUALIFIED: "Live migration adapters have not been qualified.",
+      CONFIGURATION_PARITY_NOT_VERIFIED: "Live configuration parity has not been verified.",
+      DISCOVERY_INCOMPLETE: "Discovery coverage is incomplete." };
     if (!result) blockers.append(node("li", "Checks and migration blockers will appear after preparation."));
     else if (!Array.isArray(result.blockers) || !result.blockers.length) blockers.append(node("li", "Live cloud and adapter qualification are still required."));
     else result.blockers.forEach((b) => blockers.append(node("li", explanations[b] || b)));

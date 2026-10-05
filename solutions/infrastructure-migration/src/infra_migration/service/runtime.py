@@ -164,6 +164,9 @@ class PreparationWorker:
                         "handoffs": [r.model_dump(mode="json") for r in handoffs],
                     }
                     result["migration_plan"] = json.loads(state.values["migration_plan_json"])
+                    result["blockers"] = sorted(
+                        set(result["blockers"]) | set(result["migration_plan"]["blockers"])
+                    )
                     result["recovery_plan"] = json.loads(state.values["recovery_plan_json"])
                 status = "AWAITING_REVIEW" if pending else state.values["status"]
             store.finish(job["id"], job["lease"], status, result)

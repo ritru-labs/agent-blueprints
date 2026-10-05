@@ -120,6 +120,9 @@ def test_authenticated_api_worker_restart_review_and_artifact_export(stores, sig
     assert result["status"] == "AWAITING_REVIEW", result
     assert result["result"]["input_provenance"] == "operator_supplied_snapshot"
     assert "UNVERIFIED_OPERATOR_SNAPSHOT" in result["result"]["blockers"]
+    assert "LIVE_ADAPTERS_NOT_QUALIFIED" in result["result"]["blockers"]
+    assert result["result"]["specialists"]["architecture"] == "specialists-v1"
+    assert result["result"]["recovery_plan"]["qualified"] is False
     if runner:
         assert result["result"]["compile"]["passed"]
     review = {"plan_digest": result["result"]["review_digest"], "acknowledged": True}
