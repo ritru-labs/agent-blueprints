@@ -41,6 +41,7 @@
     state.busy = false; state.paginated = false; state.previewTicket++;
     $("connect-form").reset(); $("prepare-form").reset(); $("code-content").textContent = "";
     $("code-file").replaceChildren(); $("code-format").textContent = ""; $("checks").replaceChildren(); $("blockers").replaceChildren();
+    $("planning-summary").replaceChildren(); $("recovery-actions").replaceChildren(); $("planning-review").hidden = true;
     $("progress").replaceChildren(); $("detail-run").textContent = "";
     $("session-org").textContent = ""; $("session-roles").textContent = "";
     delete $("decision-form").dataset.run; delete $("decision-form").dataset.digest;
@@ -164,6 +165,20 @@
       check("Model review", result?.model?.model ? "Completed · advisory" : result ? "Not configured" : "Pending"),
       check("Live AWS qualification", "Pending"), check("Cloud execution", "Disabled"));
     if (result?.error) checks.append(check("Preparation outcome", "Failed · operator attention needed"));
+    $("planning-review").hidden = !result?.migration_plan || !result?.recovery_plan;
+    const sequence = $("planning-summary"); sequence.replaceChildren();
+    (result?.migration_plan?.dependency_waves || []).forEach((wave, i) => {
+      sequence.append(node("p", `Stage ${i + 1}: ${wave.join(", ")}`, "fine-print"));
+    });
+    const recovery = $("recovery-actions"); recovery.replaceChildren();
+    (result?.recovery_plan?.actions || []).forEach((action) => {
+      const item = node("li", "");
+      item.append(node("strong", action.resource_id),
+        node("p", `Observe: ${action.required_observations.join("; ")}`),
+        node("p", `Before transfer: ${action.before_transfer}`),
+        node("p", `After transfer: ${action.after_transfer}`));
+      recovery.append(item);
+    });
     const blockers = $("blockers"); blockers.replaceChildren();
     const explanations = { UNVERIFIED_OPERATOR_SNAPSHOT: "Uploaded inventory has not been verified against live AWS.",
       SOURCE_NOT_FROZEN: "Source automation must be frozen before ownership transfer." };

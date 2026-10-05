@@ -6,3 +6,5 @@
 @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important}}
 
 .code-format{font-size:9px;color:#7a8c82;background:#f9fbf9;margin:0;padding:0 18px 10px}.code-format:empty{display:none}
+
+#planning-review{margin:20px 0;padding:16px;border:1px solid var(--line);border-radius:8px}#planning-review summary{font-size:12px;font-weight:600;cursor:pointer}#planning-review summary:focus-visible{outline:3px solid #5dab8b;outline-offset:3px}#planning-review p,#planning-review strong{overflow-wrap:anywhere}

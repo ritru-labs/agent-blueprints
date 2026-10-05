@@ -9,6 +9,7 @@ from ..generation import ProjectBundle, verify_bundle_directory
 from ..models import Inventory, ReviewDecision
 from ..persistence import postgres_checkpointer
 from ..pipeline import MigrationPipeline
+from ..specialists import check_handoffs
 from ..tools import AccessDenied
 from .storage import PostgresLedger, TenantStore
 
@@ -155,6 +156,15 @@ class PreparationWorker:
                     "input_provenance": "operator_supplied_snapshot",
                     "execution_enabled": False,
                 }
+                if state.values.get("architecture_version"):
+                    handoffs = check_handoffs(state.values, inventory.scope, complete=True)
+                    result["specialists"] = {
+                        "architecture": state.values["architecture_version"],
+                        "completed": [r.specialist for r in handoffs],
+                        "handoffs": [r.model_dump(mode="json") for r in handoffs],
+                    }
+                    result["migration_plan"] = json.loads(state.values["migration_plan_json"])
+                    result["recovery_plan"] = json.loads(state.values["recovery_plan_json"])
                 status = "AWAITING_REVIEW" if pending else state.values["status"]
             store.finish(job["id"], job["lease"], status, result)
         except Exception as exc:

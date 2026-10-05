@@ -39,3 +39,8 @@ Do not label a successful fixture run as a migrated environment or a production-
 ## Deployment authority
 
 The legacy CLI uses local OS identity and SQLite for a single trusted operator. The service validates pinned JWT identity and resolves roles from tenant PostgreSQL membership. Token tenant/role claims are never authority. Keep uploaded inventories marked as unverified snapshots. The preparation queue must never replay cloud writes or expose adapter admission. PostgreSQL checkpoint isolation requires dedicated tenant roles and schemas. Only trusted deployment administrators can admit an independently qualified adapter to the executor allowlist; its default is empty. Model responses, fixtures, request payloads, and graph resumes cannot admit adapters. Deploy authenticated service boundaries, approval storage, broker, runner egress, evidence retention, and recovery before customer production use.
+
+
+## Specialist boundaries
+
+New preparation runs use the coordinator and typed specialist subgraphs documented in docs/specialists.md. Preserve the compatibility graph for existing unversioned checkpoints; never change their pending review digest in place. Discovery, assessment, planning, recovery, generation and validation are deterministic bounded specialists; only advisory reasoning may call the configured model. No specialist receives raw supervisor state, credentials, authorization constructors, approval storage or live execution tools. Verify all scope/selection/output handoff bindings before continuation and review. Recovery outputs must remain unqualified until resource-specific live acceptance proves them. A stage name or model response cannot bypass policy or qualify an adapter.

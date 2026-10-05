@@ -130,6 +130,12 @@ def test_dashboard_full_browser_review_download_rejection_and_cancellation(
             page.get_by_role("button", name="Refresh", exact=True).click()
             expect(page.locator("#detail-status")).to_have_text("Awaiting review")
             expect(page.locator("#code-content")).to_contain_text("aws.ec2.Vpc")
+            page.get_by_text("Migration sequence and recovery requirements", exact=True).click()
+            expect(page.locator("#planning-summary")).to_contain_text("Stage 2")
+            expect(page.locator("#recovery-actions")).to_contain_text(
+                "State restore alone is not rollback"
+            )
+            page.get_by_text("Migration sequence and recovery requirements", exact=True).click()
             expect(page.get_by_role("button", name="Approve package", exact=True)).to_be_hidden()
             assert page.evaluate("window.__injected") is None
             assert page.evaluate("localStorage.length + sessionStorage.length") == 0

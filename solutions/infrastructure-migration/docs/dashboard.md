@@ -12,7 +12,7 @@ Submitting creates an idempotent preparation job. A retry of the same unchanged 
 
 ## Review and download
 
-Select a run to inspect validation and migration blockers. The file selector previews generated TypeScript, exact import manifests, expected observed inputs and project configuration as plain text. Preview and ZIP export verify the bound artifact digest and reject extra/changed files, links and malformed manifests. Preview filenames must belong to the verified bundle; arbitrary filesystem paths are rejected. No generated code is executed in the browser.
+Select a run to inspect validation and migration blockers. New specialist runs also expose dependency stages and unqualified recovery requirements in the expandable planning section. The file selector previews generated TypeScript, exact import manifests, expected observed inputs and project configuration as plain text. Preview and ZIP export verify the bound artifact digest and reject extra/changed files, links and malformed manifests. Preview filenames must belong to the verified bundle; arbitrary filesystem paths are rejected. No generated code is executed in the browser.
 
 The requester can cancel queued or awaiting-review work. A distinct authorized reviewer can approve or reject the exact package after acknowledging code/check/blocker review. The server rechecks role, requester separation, state and package digest; hiding a button is not authorization. Decisions are queued and resumed by the worker after restart. Approval results in `REVIEWED_EXECUTION_BLOCKED`; rejection requires a new package. Neither authorizes cloud changes.
 

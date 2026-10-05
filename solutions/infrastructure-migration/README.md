@@ -2,7 +2,7 @@
 
 A governed infrastructure migration agent built on LangGraph.
 
-This solution prepares infrastructure migration packages and implements governed ownership transfer to Pulumi. The main LangGraph workflow performs discovery, assessment, optional model review, deterministic code generation, isolated compilation, and durable package review. Separate execution adapters require exact approvals, resource locks, drift checks, and operation reconciliation.
+This solution prepares infrastructure migration packages and implements governed ownership transfer to Pulumi. The LangGraph coordinator invokes focused discovery, assessment, advisory reasoning, migration planning, recovery planning, code generation and validation subgraphs before durable human package review. See [specialist contracts and checkpoint compatibility](docs/specialists.md). Separate execution adapters require exact approvals, resource locks, drift checks, and operation reconciliation.
 
 **Implemented scope:** AWS IPv4 VPCs and subnets, bounded AWS reads, safe CloudFormation parsing and retention/release proposals, typed model review using official documentation, Pulumi TypeScript generation, Docker verification, PostgreSQL checkpoints, protected imports, and CloudFormation change-set adapters. Unsupported configurations remain blocked. Discovery explicitly reports partial coverage. Live cloud/model acceptance and production deployment are pending; the executor admits no adapters by default.
 
