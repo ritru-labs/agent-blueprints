@@ -2,6 +2,7 @@
 
 import argparse
 import json
+import logging
 import os
 import re
 import time
@@ -9,13 +10,13 @@ from pathlib import Path
 from uuid import UUID
 
 import uvicorn
-from pydantic import ConfigDict, Field
+from pydantic import ConfigDict, Field, model_validator
 
 from ..models import Contract
 from ..reasoning import ModelReviewer, fetch_document
 from ..runner import DockerRunner
 from .api import create_app
-from .auth import JwtVerifier, actor_id
+from .auth import JwtVerifier, ManagedJwtVerifier, actor_id
 from .runtime import PreparationWorker, Registry, TenantRuntime
 from .storage import TenantStore
 
@@ -39,12 +40,22 @@ class ServiceConfig(Contract):
     model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
     issuer: str
     audience: str
-    public_jwks_file: str
+    public_jwks_file: str | None = None
+    public_jwks_url: str | None = None
+    jwks_ttl_seconds: int = Field(default=300, ge=60, le=900)
     tenants: tuple[TenantConfig, ...]
     compiler_image: str | None = None
     model_name: str | None = None
     model_base_url: str | None = None
     official_documents: bool = False
+
+    @model_validator(mode="after")
+    def key_source(self):
+        if bool(self.public_jwks_file) == bool(self.public_jwks_url):
+            raise ValueError("Configure exactly one trusted signing-key source")
+        if not 1 <= len(self.tenants) <= 32:
+            raise ValueError("Provision between one and 32 tenants per service")
+        return self
 
 
 def load(path: Path):
@@ -53,8 +64,13 @@ def load(path: Path):
         raise ValueError("Provision unique tenant identities")
     if config.model_base_url and not config.model_name:
         raise ValueError("A model endpoint needs an explicit model")
-    jwks = (path.parent / config.public_jwks_file).resolve()
-    verifier = JwtVerifier(config.issuer, config.audience, json.loads(jwks.read_text()))
+    if config.public_jwks_url:
+        verifier = ManagedJwtVerifier(
+            config.issuer, config.audience, config.public_jwks_url, ttl=config.jwks_ttl_seconds
+        )
+    else:
+        jwks = (path.parent / config.public_jwks_file).resolve()
+        verifier = JwtVerifier(config.issuer, config.audience, json.loads(jwks.read_text()))
     tenants = {}
     for tenant in config.tenants:
         if (
@@ -103,6 +119,10 @@ def main():
                 )
         print(json.dumps({"tenants_initialized": len(config.tenants), "cloud_writes": 0}))
     elif args.command == "serve":
+        logger = logging.getLogger("infra_migration.requests")
+        logger.setLevel(logging.INFO)
+        logger.addHandler(logging.StreamHandler())
+        logger.propagate = False
         uvicorn.run(
             create_app(verifier, registry),
             host=args.host,

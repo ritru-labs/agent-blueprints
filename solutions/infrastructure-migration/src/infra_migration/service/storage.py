@@ -57,6 +57,13 @@ class TenantStore:
         with self.transaction() as db:
             db.execute(SCHEMA, prepare=False)
 
+    def ready(self):
+        # A SELECT-only probe verifies restricted tenant role/schema and queue tables.
+        with self.connection() as db:
+            for table in ("service_members", "service_jobs", "service_operations"):
+                db.execute("SELECT 1 FROM " + table + " LIMIT 0")
+        return True
+
     def provision_member(self, actor: str, roles: tuple[str, ...], *, active=True):
         Principal(tenant_id=self.tenant_id, subject=actor, roles=roles)
         with self.transaction() as db:

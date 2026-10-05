@@ -338,3 +338,27 @@ def test_dashboard_run_pagination_permissions_and_scoped_preview(stores, signing
         ).status_code
         == 403
     )
+
+
+def test_readiness_requires_real_provisioned_queue_and_restricted_role(stores, signing, tmp_path):
+    store = stores[0]
+    inventory = scoped_inventory(store)
+    registry = Registry(
+        {
+            store.tenant_id: TenantRuntime(
+                store,
+                frozenset([inventory.scope.account_id]),
+                frozenset(inventory.scope.regions),
+                tmp_path / "ready-artifacts",
+            )
+        }
+    )
+    client = TestClient(create_app(JwtVerifier(ISSUER, AUDIENCE, signing[1]), registry))
+    assert client.get("/health/ready").status_code == 200
+    assert client.get("/health/ready").json()["cloud_execution"] == "disabled"
+    with store.transaction() as db:
+        db.execute("DROP TABLE service_jobs")
+    cold_client = TestClient(create_app(JwtVerifier(ISSUER, AUDIENCE, signing[1]), registry))
+    failed = cold_client.get("/health/ready")
+    assert failed.status_code == 503
+    assert "service_jobs" not in failed.text and store.dsn not in failed.text

@@ -1,4 +1,6 @@
-# LangGraph infrastructure migration agent
+# Infrastructure Migration Agent
+
+A governed infrastructure migration agent built on LangGraph.
 
 This solution prepares infrastructure migration packages and implements governed ownership transfer to Pulumi. The main LangGraph workflow performs discovery, assessment, optional model review, deterministic code generation, isolated compilation, and durable package review. Separate execution adapters require exact approvals, resource locks, drift checks, and operation reconciliation.
 
@@ -60,6 +62,8 @@ The service validates pinned issuer/audience/signature/expiry, resolves organiza
 ## Operator dashboard
 
 Open the service root for snapshot upload, resource selection, real run tracking, verified code previews/downloads, and distinct-reviewer decisions. Sessions use memory-only access tokens; browser SSO login remains pending. See [dashboard operation and browser qualification](docs/dashboard.md).
+
+Managed signing-key rotation, cached database readiness and redacted request telemetry are available. See [operational controls and remaining acceptance](docs/operations.md).
 
 ## Verify and qualify
 

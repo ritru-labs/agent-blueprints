@@ -17,6 +17,7 @@ from pydantic import ConfigDict, Field, field_validator
 from ..generation import ProjectBundle, verify_bundle_directory
 from ..models import Contract, Inventory, ReviewDecision
 from ..tools import AccessDenied
+from .operations import Readiness, RequestTelemetry
 from .runtime import Registry
 
 
@@ -106,10 +107,10 @@ def public_job(row, principal=None, *, details=True):
 
 
 def create_app(verifier, registry: Registry):
-    app = FastAPI(
-        title="Infrastructure migration preparation service", docs_url=None, redoc_url=None
-    )
+    app = FastAPI(title="Infrastructure Migration Agent", docs_url=None, redoc_url=None)
     app.add_middleware(BodyLimit)
+    app.add_middleware(RequestTelemetry)
+    readiness = Readiness(verifier, registry)
     bearer = HTTPBearer(auto_error=False)
 
     @app.exception_handler(AccessDenied)
@@ -142,6 +143,14 @@ def create_app(verifier, registry: Registry):
     @app.get("/health/live")
     def health():
         return {"status": "alive", "cloud_execution": "disabled"}
+
+    @app.get("/health/ready")
+    def ready():
+        available = readiness.check()
+        return JSONResponse(
+            {"status": "ready" if available else "not_ready", "cloud_execution": "disabled"},
+            200 if available else 503,
+        )
 
     @app.get("/", include_in_schema=False)
     def dashboard():
