@@ -1,0 +1,18 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "AssumeFromApprovedRunnerOnly",
+      "Effect": "Allow",
+      "Principal": {
+        "AWS": "REPLACE_TRUSTED_PRINCIPAL_ARN"
+      },
+      "Action": "sts:AssumeRole",
+      "Condition": {
+        "StringEquals": {
+          "sts:ExternalId": "REPLACE_EXTERNAL_ID"
+        }
+      }
+    }
+  ]
+}
