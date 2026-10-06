@@ -37,6 +37,7 @@ Full scope, failure-modes register, safety rules and test plan: [`docs/SCOPE_AND
 | --- | --- |
 | `tools.lock.json` | Exact tool versions for every run |
 | `src/iac_agent/core/` | Cloud-neutral core: models, guarded Terraform wrapper, gates, naming, reports |
+| `src/iac_agent/adapters/aws/` | AWS adapter: read-only discovery, ownership classifier, fixed import IDs, opt-in best-effort lister |
 | `iam/scanner-policy.json` | Read-only discovery identity; explicit deny on everything else, including object and secret reads |
 | `iam/importer-policy.template.json` | Same reads plus Terraform state bucket and key only |
 | `iam/trust-policy.template.json` | Assume-role trust with external ID |

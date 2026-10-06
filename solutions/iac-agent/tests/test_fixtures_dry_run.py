@@ -14,6 +14,8 @@ from pathlib import Path
 
 import pytest
 
+from iac_agent.adapters.aws.import_ids import PATTERNS as IMPORT_ID
+
 ROOT = Path(__file__).resolve().parent.parent
 FIXTURES = ROOT / "fixtures"
 STUB_DIR = Path(__file__).resolve().parent / "stub_aws"
@@ -26,50 +28,6 @@ SCRIPTS = {
     "F5": "F5-permission-gap",
     "F6": "F6-drift-mid-run",
     "F7": "F7-forced-replacement",
-}
-
-# Import ID format per type, from the "Import" section of the AWS provider
-# v6.67.0 docs (website/docs/r/<type>.html.markdown).
-NAME = r"[\w+=,.@-]+"
-BUCKET = r"[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]"
-POLICY_ARN = r"arn:aws:iam::(aws|\d{12}):policy/[\w+=,.@/-]+"
-HEX = r"[0-9a-f]+"
-IMPORT_ID = {
-    "aws_vpc": rf"vpc-{HEX}",
-    "aws_subnet": rf"subnet-{HEX}",
-    "aws_internet_gateway": rf"igw-{HEX}",
-    "aws_nat_gateway": rf"nat-{HEX}",
-    "aws_eip": rf"eipalloc-{HEX}",
-    "aws_route_table": rf"rtb-{HEX}",
-    "aws_route": rf"rtb-{HEX}_\d+\.\d+\.\d+\.\d+/\d+",
-    "aws_route_table_association": rf"subnet-{HEX}/rtb-{HEX}",
-    "aws_network_acl": rf"acl-{HEX}",
-    "aws_network_interface": rf"eni-{HEX}",
-    "aws_security_group": rf"sg-{HEX}",
-    "aws_vpc_security_group_ingress_rule": rf"sgr-{HEX}",
-    "aws_vpc_security_group_egress_rule": rf"sgr-{HEX}",
-    "aws_instance": rf"i-{HEX}",
-    "aws_ebs_volume": rf"vol-{HEX}",
-    "aws_volume_attachment": rf"/dev/[a-z0-9]+:vol-{HEX}:i-{HEX}",
-    "aws_launch_template": rf"lt-{HEX}",
-    "aws_autoscaling_group": NAME,
-    "aws_iam_role": NAME,
-    "aws_iam_instance_profile": NAME,
-    "aws_iam_policy": POLICY_ARN,
-    "aws_iam_role_policy": rf"{NAME}:{NAME}",
-    "aws_iam_role_policy_attachment": rf"{NAME}/{POLICY_ARN}",
-    **{
-        t: BUCKET
-        for t in [
-            "aws_s3_bucket",
-            "aws_s3_bucket_versioning",
-            "aws_s3_bucket_server_side_encryption_configuration",
-            "aws_s3_bucket_public_access_block",
-            "aws_s3_bucket_policy",
-            "aws_s3_bucket_lifecycle_configuration",
-            "aws_s3_bucket_ownership_controls",
-        ]
-    },
 }
 
 # The F2 row of the brief's Testing table, as Terraform types.

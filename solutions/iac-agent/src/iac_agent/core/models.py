@@ -60,6 +60,7 @@ class Discovery(BaseModel):
     region: str
     resources: list[Resource] = Field(default_factory=list)
     coverage: list[Coverage] = Field(default_factory=list)
+    signals: dict[str, Any] = Field(default_factory=dict)  # adapter-specific ownership inputs
 
     @property
     def incomplete(self) -> list[Coverage]:
