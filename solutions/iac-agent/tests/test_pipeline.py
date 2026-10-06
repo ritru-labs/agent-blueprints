@@ -2,7 +2,7 @@
 
 The real Terraform wrapper is used with a fake runner, so the forbidden-command
 and plan-hash guards are exercised for real. The fake binary builds plan JSON
-from imports.tf and generated.tf the way Terraform would.
+from imports.tf and the generated .tf files the way Terraform would.
 """
 
 import json
@@ -53,6 +53,9 @@ class FakeCloud:
     def provider_files(self, versions, account):
         return {"versions.tf": f"# terraform {versions['terraform']} account {account}\n"}
 
+    def file_for(self, terraform_type):
+        return "network.tf" if terraform_type in ("aws_vpc", "aws_subnet") else "other.tf"
+
 
 class FakeTerraformCLI:
     """Enough of the terraform CLI for the pipeline. `body` adds HCL to generated blocks;
@@ -94,7 +97,7 @@ class FakeTerraformCLI:
         return subprocess.CompletedProcess(cmd, code, stdout=out, stderr="")
 
     def _plan(self, wd, imports):
-        generated = (wd / "generated.tf").read_text() if (wd / "generated.tf").exists() else ""
+        generated = "\n".join(p.read_text() for p in sorted(wd.glob("*.tf")))
         changes, config = [], []
         for address, import_id in imports:
             block = hcl.get_block(generated, address)
@@ -178,6 +181,9 @@ def test_happy_path_adopts_exactly_the_signed_off_scope(tmp_path):
     assert state["status"] == "adopted"
     assert state["adopted"] == ["aws_subnet.subnet_app", "aws_vpc.vpc_main"]
     assert len(applied(cli)) == 1 and cloud.discoveries == 2  # scan + re-scan before import
+    assert not (tmp_path / "generated.tf").exists()
+    assert sorted(hcl.blocks((tmp_path / "network.tf").read_text())) == ["aws_subnet.subnet_app", "aws_vpc.vpc_main"]
+    assert "terraform plan" in (tmp_path / "README.md").read_text()  # client README on success
     report = (tmp_path / "ADOPTION_REPORT.md").read_text()
     assert "- Adopted: 2" in report and "- Excluded: 1" in report and "**adopted**" in report
     assert "**not fixed**" in (tmp_path / "FINDINGS.md").read_text()
@@ -219,7 +225,7 @@ def test_hardcoded_ids_are_rewritten_in_code_not_by_the_llm(tmp_path):
     cli = FakeTerraformCLI(body={"aws_subnet.subnet_app": '  vpc_id = "vpc-0a1"\n'})
     graph, _, cli = make(tmp_path, cli=cli)
     run_to_approval(graph)
-    assert "vpc_id = aws_vpc.vpc_main.id" in (tmp_path / "generated.tf").read_text()
+    assert "vpc_id = aws_vpc.vpc_main.id" in (tmp_path / "network.tf").read_text()
     assert graph.invoke(Command(resume=True), CONFIG)["status"] == "adopted"
 
 
@@ -264,9 +270,9 @@ def leak_at(marker):
     """A fake gitleaks that reports the line holding `marker`, wherever it is now."""
 
     def scan(wd):
-        lines = (wd / "generated.tf").read_text().splitlines()
-        return [{"File": str(wd / "generated.tf"), "StartLine": n, "RuleID": "generic-api-key"}
-                for n, line in enumerate(lines, 1) if marker in line]  # fmt: skip
+        return [{"File": str(p), "StartLine": n, "RuleID": "generic-api-key"}
+                for p in sorted(wd.glob("*.tf")) for n, line in enumerate(p.read_text().splitlines(), 1)
+                if marker in line]  # fmt: skip
 
     return scan
 

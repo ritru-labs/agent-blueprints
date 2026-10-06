@@ -286,3 +286,12 @@ def test_import_id_builders_and_state_parsing():
     )
     assert ids.from_state("aws_route", {"id": "r-abc"}) == "r-abc"  # incomplete attrs: fall back to id
     assert not ids.is_valid("aws_vpc", "subnet-1") and not ids.is_valid("aws_unknown", "x")
+
+
+def test_every_certified_type_has_a_service_file():
+    from iac_agent.adapters.aws.adapter import AwsAdapter
+
+    files = {t: AwsAdapter.file_for(AwsAdapter, t) for t in ids.CERTIFIED}
+    assert set(files.values()) == {"network.tf", "security_groups.tf", "s3.tf", "iam.tf", "ec2.tf"}
+    assert files["aws_vpc_security_group_egress_rule"] == "security_groups.tf"
+    assert files["aws_s3_bucket_policy"] == "s3.tf" and files["aws_iam_instance_profile"] == "iam.tf"

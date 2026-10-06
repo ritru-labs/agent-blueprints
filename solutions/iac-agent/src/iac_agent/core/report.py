@@ -115,3 +115,36 @@ def findings_report(failed_checks: Iterable[Mapping]) -> str:
             ),
         ]
     )
+
+
+def client_readme(account: str, region: str, code_files: list[str], versions: Mapping[str, str]) -> str:
+    """README.md for the client: what they own now, and how to change it safely."""
+    return "\n".join(
+        [
+            "# Terraform for your existing infrastructure",
+            "",
+            f"This code manages resources that already exist in account `{account}`, region `{region}`.",
+            "It was adopted without changing anything: `terraform plan` shows **No changes**.",
+            "",
+            "## Files",
+            "",
+            *[f"- `{name}`" for name in code_files],
+            "- `versions.tf`, `providers.tf`: pinned Terraform "
+            f"{versions['terraform']} and AWS provider {versions['terraform_provider_aws']}; "
+            "the provider only works in this account",
+            "- `ADOPTION_REPORT.md`: what was adopted, what was skipped or excluded, and why",
+            "- `FINDINGS.md`: security findings, reported and **not** fixed",
+            "",
+            "## Changing infrastructure from now on",
+            "",
+            "1. `terraform init`, then `terraform plan`. Before your first change it must show **No changes**.",
+            "2. Make the change in code, run `terraform plan` and read every line. Treat any `replace` or",
+            "   `destroy` as a stop sign until you understand it.",
+            "3. Apply only the plan you reviewed: `terraform plan -out=tfplan`, then `terraform apply tfplan`.",
+            "4. Do not change these resources in the console any more; the next plan would undo it.",
+            "",
+            "Resources listed as skipped or excluded in `ADOPTION_REPORT.md` are **not** managed here.",
+            "Each finding in `FINDINGS.md` is a separate change for you to decide on.",
+            "",
+        ]
+    )

@@ -44,6 +44,23 @@ class AwsAdapter:
     def classify(self, discovery: Discovery) -> list[Classification]:
         return classify(discovery, self.in_state)
 
+    FILES = {
+        "aws_vpc": "network.tf", "aws_subnet": "network.tf", "aws_internet_gateway": "network.tf",
+        "aws_nat_gateway": "network.tf", "aws_eip": "network.tf", "aws_route_table": "network.tf",
+        "aws_route": "network.tf", "aws_route_table_association": "network.tf",
+        "aws_security_group": "security_groups.tf", "aws_vpc_security_group_ingress_rule": "security_groups.tf",
+        "aws_vpc_security_group_egress_rule": "security_groups.tf",
+        "aws_instance": "ec2.tf", "aws_ebs_volume": "ec2.tf", "aws_volume_attachment": "ec2.tf",
+        "aws_key_pair": "ec2.tf",
+    }  # fmt: skip
+
+    def file_for(self, terraform_type: str) -> str:
+        if terraform_type.startswith("aws_s3_"):
+            return "s3.tf"
+        if terraform_type.startswith("aws_iam_"):
+            return "iam.tf"
+        return self.FILES.get(terraform_type, "other.tf")
+
     def provider_files(self, versions: Mapping[str, str], account: str) -> dict[str, str]:
         return {
             "versions.tf": (
