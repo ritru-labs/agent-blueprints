@@ -1,0 +1,35 @@
+[project]
+name = "iac-agent"
+version = "0.1.0"
+description = "Adopts hand-built cloud infrastructure into Terraform state with zero changes."
+requires-python = ">=3.11"
+dependencies = [
+  "pydantic>=2.7,<3",
+  "boto3>=1.35,<2",
+  "langgraph>=0.4,<2",
+  "langgraph-checkpoint-sqlite>=2,<4",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "ruff>=0.6"]
+
+[project.scripts]
+iac-agent = "iac_agent.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/iac_agent"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM"]

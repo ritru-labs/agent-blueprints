@@ -74,14 +74,28 @@ IMPORT_ID = {
 
 # The F2 row of the brief's Testing table, as Terraform types.
 F2_TYPES = {
-    "aws_vpc", "aws_subnet", "aws_internet_gateway", "aws_nat_gateway", "aws_eip",
-    "aws_route_table", "aws_route", "aws_route_table_association",
-    "aws_security_group", "aws_vpc_security_group_ingress_rule",
-    "aws_vpc_security_group_egress_rule", "aws_iam_role",
-    "aws_iam_role_policy_attachment", "aws_iam_instance_profile", "aws_instance",
-    "aws_ebs_volume", "aws_volume_attachment", "aws_s3_bucket",
-    "aws_s3_bucket_versioning", "aws_s3_bucket_server_side_encryption_configuration",
-    "aws_s3_bucket_policy", "aws_s3_bucket_lifecycle_configuration",
+    "aws_vpc",
+    "aws_subnet",
+    "aws_internet_gateway",
+    "aws_nat_gateway",
+    "aws_eip",
+    "aws_route_table",
+    "aws_route",
+    "aws_route_table_association",
+    "aws_security_group",
+    "aws_vpc_security_group_ingress_rule",
+    "aws_vpc_security_group_egress_rule",
+    "aws_iam_role",
+    "aws_iam_role_policy_attachment",
+    "aws_iam_instance_profile",
+    "aws_instance",
+    "aws_ebs_volume",
+    "aws_volume_attachment",
+    "aws_s3_bucket",
+    "aws_s3_bucket_versioning",
+    "aws_s3_bucket_server_side_encryption_configuration",
+    "aws_s3_bucket_policy",
+    "aws_s3_bucket_lifecycle_configuration",
 }
 
 EXPECTED_OUTCOME = {
@@ -107,9 +121,7 @@ def run(script, tmp_path, *args, **extra_env):
         "FIXTURE_RETRY_SECONDS": "0",
         **extra_env,
     }
-    return subprocess.run(
-        ["bash", str(script), *args], env=env, capture_output=True, text=True, timeout=120
-    )
+    return subprocess.run(["bash", str(script), *args], env=env, capture_output=True, text=True, timeout=120)
 
 
 def calls(tmp_path):
@@ -154,7 +166,7 @@ def by_expect(manifest, expect):
 
 def test_f2_covers_the_typical_web_stack(tmp_path):
     manifest = create("F2", tmp_path)
-    assert F2_TYPES <= {r["terraform_type"] for r in by_expect(manifest, "adopt")}
+    assert {r["terraform_type"] for r in by_expect(manifest, "adopt")} >= F2_TYPES
     assert any("create-bucket-configuration" in c for c in calls(tmp_path))  # not us-east-1
 
 

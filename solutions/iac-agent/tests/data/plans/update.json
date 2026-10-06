@@ -1,0 +1,242 @@
+{
+  "format_version": "1.2",
+  "terraform_version": "1.16.5",
+  "applyable": true,
+  "complete": true,
+  "errored": false,
+  "planned_values": {},
+  "configuration": {
+    "provider_config": {
+      "aws": {
+        "name": "aws",
+        "full_name": "registry.terraform.io/hashicorp/aws",
+        "version_constraint": "6.67.0"
+      }
+    },
+    "root_module": {
+      "resources": [
+        {
+          "address": "aws_vpc.vpc_f1_vpc",
+          "mode": "managed",
+          "type": "aws_vpc",
+          "name": "vpc_f1_vpc",
+          "provider_config_key": "aws",
+          "expressions": {
+            "cidr_block": {
+              "constant_value": "10.42.0.0/16"
+            },
+            "enable_dns_hostnames": {
+              "constant_value": true
+            },
+            "tags": {
+              "constant_value": {
+                "Name": "f1-vpc"
+              }
+            }
+          },
+          "schema_version": 0
+        },
+        {
+          "address": "aws_subnet.subnet_f1_public_a",
+          "mode": "managed",
+          "type": "aws_subnet",
+          "name": "subnet_f1_public_a",
+          "provider_config_key": "aws",
+          "expressions": {
+            "vpc_id": {
+              "references": [
+                "aws_vpc.vpc_f1_vpc.id",
+                "aws_vpc.vpc_f1_vpc"
+              ]
+            },
+            "cidr_block": {
+              "constant_value": "10.42.1.0/24"
+            },
+            "availability_zone": {
+              "constant_value": "eu-west-1a"
+            },
+            "map_public_ip_on_launch": {
+              "constant_value": true
+            },
+            "tags": {
+              "constant_value": {
+                "Name": "f1-public-a"
+              }
+            }
+          },
+          "schema_version": 0
+        },
+        {
+          "address": "aws_s3_bucket.s3_bucket_iacfx_f1_demo_111122223333",
+          "mode": "managed",
+          "type": "aws_s3_bucket",
+          "name": "s3_bucket_iacfx_f1_demo_111122223333",
+          "provider_config_key": "aws",
+          "expressions": {
+            "bucket": {
+              "constant_value": "iacfx-f1-demo-111122223333"
+            },
+            "tags": {
+              "constant_value": {
+                "Name": "iacfx-f1-demo-111122223333"
+              }
+            }
+          },
+          "schema_version": 0
+        }
+      ]
+    }
+  },
+  "resource_changes": [
+    {
+      "address": "aws_vpc.vpc_f1_vpc",
+      "mode": "managed",
+      "type": "aws_vpc",
+      "name": "vpc_f1_vpc",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "no-op"
+        ],
+        "before": {
+          "id": "vpc-0a1b2c3d4e5f60718",
+          "cidr_block": "10.42.0.0/16",
+          "enable_dns_hostnames": true,
+          "enable_dns_support": true,
+          "instance_tenancy": "default",
+          "tags": {
+            "Name": "f1-vpc"
+          },
+          "tags_all": {
+            "Name": "f1-vpc"
+          }
+        },
+        "after": {
+          "id": "vpc-0a1b2c3d4e5f60718",
+          "cidr_block": "10.42.0.0/16",
+          "enable_dns_hostnames": true,
+          "enable_dns_support": true,
+          "instance_tenancy": "default",
+          "tags": {
+            "Name": "f1-vpc"
+          },
+          "tags_all": {
+            "Name": "f1-vpc"
+          }
+        },
+        "after_unknown": {},
+        "before_sensitive": {
+          "tags": {},
+          "tags_all": {}
+        },
+        "after_sensitive": {
+          "tags": {},
+          "tags_all": {}
+        },
+        "importing": {
+          "id": "vpc-0a1b2c3d4e5f60718"
+        }
+      }
+    },
+    {
+      "address": "aws_subnet.subnet_f1_public_a",
+      "mode": "managed",
+      "type": "aws_subnet",
+      "name": "subnet_f1_public_a",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "id": "subnet-0f1e2d3c4b5a69788",
+          "vpc_id": "vpc-0a1b2c3d4e5f60718",
+          "cidr_block": "10.42.1.0/24",
+          "availability_zone": "eu-west-1a",
+          "map_public_ip_on_launch": true,
+          "tags": {
+            "Name": "f1-public-a"
+          },
+          "tags_all": {
+            "Name": "f1-public-a"
+          }
+        },
+        "after": {
+          "id": "subnet-0f1e2d3c4b5a69788",
+          "vpc_id": "vpc-0a1b2c3d4e5f60718",
+          "cidr_block": "10.42.1.0/24",
+          "availability_zone": "eu-west-1a",
+          "map_public_ip_on_launch": true,
+          "tags": {
+            "Name": "f1-public-a"
+          },
+          "tags_all": {
+            "Name": "f1-public-a",
+            "Owner": "team-a"
+          }
+        },
+        "after_unknown": {},
+        "before_sensitive": {
+          "tags": {},
+          "tags_all": {}
+        },
+        "after_sensitive": {
+          "tags": {},
+          "tags_all": {}
+        },
+        "importing": {
+          "id": "subnet-0f1e2d3c4b5a69788"
+        }
+      }
+    },
+    {
+      "address": "aws_s3_bucket.s3_bucket_iacfx_f1_demo_111122223333",
+      "mode": "managed",
+      "type": "aws_s3_bucket",
+      "name": "s3_bucket_iacfx_f1_demo_111122223333",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "no-op"
+        ],
+        "before": {
+          "id": "iacfx-f1-demo-111122223333",
+          "bucket": "iacfx-f1-demo-111122223333",
+          "force_destroy": false,
+          "object_lock_enabled": false,
+          "tags": {
+            "Name": "iacfx-f1-demo-111122223333"
+          },
+          "tags_all": {
+            "Name": "iacfx-f1-demo-111122223333"
+          }
+        },
+        "after": {
+          "id": "iacfx-f1-demo-111122223333",
+          "bucket": "iacfx-f1-demo-111122223333",
+          "force_destroy": false,
+          "object_lock_enabled": false,
+          "tags": {
+            "Name": "iacfx-f1-demo-111122223333"
+          },
+          "tags_all": {
+            "Name": "iacfx-f1-demo-111122223333"
+          }
+        },
+        "after_unknown": {},
+        "before_sensitive": {
+          "tags": {},
+          "tags_all": {}
+        },
+        "after_sensitive": {
+          "tags": {},
+          "tags_all": {}
+        },
+        "importing": {
+          "id": "iacfx-f1-demo-111122223333"
+        }
+      }
+    }
+  ],
+  "_comment": "Import with update: provider default_tags add tags_all.Owner. Fixable by repair."
+}

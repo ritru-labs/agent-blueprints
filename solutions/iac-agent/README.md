@@ -4,7 +4,7 @@ Brings hand-built cloud infrastructure under Terraform state with **zero changes
 
 > **The promise:** no resource is created, updated, replaced or deleted. Proof is a `terraform plan` with 0 changes against the live cloud, checked by Terraform, not by the agent.
 
-Status: **V0 (foundations)**. No agent code yet. Nothing here touches a client account.
+Status: **V0 → V1**. Foundations done; the V1 agent is being built (`src/iac_agent/`). Nothing here touches a client account.
 
 ## Design in one minute
 
@@ -36,6 +36,7 @@ Full scope, failure-modes register, safety rules and test plan: [`docs/SCOPE_AND
 | Path | Purpose |
 | --- | --- |
 | `tools.lock.json` | Exact tool versions for every run |
+| `src/iac_agent/core/` | Cloud-neutral core: models, guarded Terraform wrapper, gates, naming, reports |
 | `iam/scanner-policy.json` | Read-only discovery identity; explicit deny on everything else, including object and secret reads |
 | `iam/importer-policy.template.json` | Same reads plus Terraform state bucket and key only |
 | `iam/trust-policy.template.json` | Assume-role trust with external ID |
@@ -48,8 +49,8 @@ Full scope, failure-modes register, safety rules and test plan: [`docs/SCOPE_AND
 
 ```sh
 cd solutions/iac-agent
-pip install pytest
-pytest -q tests                 # offline: policy checks + fixture dry runs (needs jq)
+pip install -e ".[dev]"
+pytest -q                       # offline: policies, gates on recorded plans, fixture dry runs (needs jq)
 
 # In the sandbox account only:
 export SANDBOX_ACCOUNT_ID=... AWS_REGION=...

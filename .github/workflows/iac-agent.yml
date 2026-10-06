@@ -21,8 +21,10 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: pip install pytest shellcheck-py
-      - name: IAM policies cannot write; fixtures dry-run against a stub aws (offline)
+      - run: pip install -e ".[dev]" shellcheck-py
+      - name: Lint (ruff)
+        run: ruff check src tests && ruff format --check src tests
+      - name: Tests (offline: IAM policies, gates on recorded plans, fixture dry runs)
         run: pytest -q tests
       - name: Shell scripts lint
         run: shellcheck -x -S style scripts/*.sh fixtures/*.sh fixtures/*/*.sh tests/stub_aws/aws

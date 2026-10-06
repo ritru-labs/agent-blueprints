@@ -119,6 +119,8 @@ Every test run checks: gates behave as the manifest expects; state == adopt list
 
 Done: pinned tools (`tools.lock.json`), scanner/importer IAM with blanket NotAction deny (62 offline tests), live simulator check script, fixtures F1–F7 with manifests + guard + teardown for everything they create, offline dry-run of every fixture and teardown against a stub `aws` (`tests/stub_aws/aws`, 17 tests), CI workflow (`.github/workflows/iac-agent.yml`). Fixtures have not yet run against real AWS.
 
+V1 core (`src/iac_agent/core/`): pydantic models, guarded Terraform wrapper (pinned versions, refuses destroy/import/taint/state rm/-target/-replace, applies only the plan file whose hash passed the plan gate), gates (plan, config, static, coverage, fingerprint, verify) tested on recorded plan JSON in `tests/data/plans/`, deterministic naming, adoption and findings reports.
+
 Manifest decisions to confirm with Supraj: AWS-applied defaults that read back like explicit config (the allow-all egress rule on a new security group; SSE-S3, Block Public Access and BucketOwnerEnforced on a new bucket) are expected as **adopt**, because the API cannot tell them apart from hand-set values. Root volumes and primary ENIs are **excluded** (owned through `aws_instance`).
 
 Waiting on Supraj: sandbox AWS account ID + region; confirmation of open decisions (defaults: Terraform 1.16.x, Claude on Bedrock, flat files per service in V1, default VPC excluded, private repo until pilot).
@@ -127,7 +129,7 @@ Waiting on Supraj: sandbox AWS account ID + region; confirmation of open decisio
 
 1. ~~Fixtures F2–F7 with manifests; extend teardown. Shellcheck clean. Dry-run with a stub `aws` on PATH.~~ Done.
 2. ~~Archive the old Pulumi branch: add a note at the top of its README saying it is reference only.~~ Done: `feat/infrastructure-migration-langgraph` README is marked archived.
-3. V1 core skeleton: models, terraform wrapper, plan-JSON gate with unit tests on recorded plan JSON. No AWS calls yet.
+3. ~~V1 core skeleton: models, terraform wrapper, plan-JSON gate with unit tests on recorded plan JSON. No AWS calls yet.~~ Done.
 4. AWS adapter: discovery + ownership classifier + import IDs, tested on recorded API responses.
 5. LangGraph pipeline with the two human interrupts; repair loop; reports.
 6. Run F1–F7 in the sandbox once Supraj provides it.
