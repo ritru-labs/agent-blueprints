@@ -126,7 +126,7 @@ Waiting on Supraj: sandbox AWS account ID + region; confirmation of open decisio
 ## Next tasks, in order
 
 1. ~~Fixtures F2–F7 with manifests; extend teardown. Shellcheck clean. Dry-run with a stub `aws` on PATH.~~ Done.
-2. Archive the old Pulumi branch: add a note at the top of its README saying it is reference only.
+2. ~~Archive the old Pulumi branch: add a note at the top of its README saying it is reference only.~~ Done: `feat/infrastructure-migration-langgraph` README is marked archived.
 3. V1 core skeleton: models, terraform wrapper, plan-JSON gate with unit tests on recorded plan JSON. No AWS calls yet.
 4. AWS adapter: discovery + ownership classifier + import IDs, tested on recorded API responses.
 5. LangGraph pipeline with the two human interrupts; repair loop; reports.
