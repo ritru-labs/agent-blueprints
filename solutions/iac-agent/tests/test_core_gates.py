@@ -178,26 +178,51 @@ def test_config_gate_fails_provisioners():
 
 
 @pytest.mark.parametrize(
-    "hcl",
+    "body",
     [
-        "lifecycle {\n  ignore_changes = [tags]\n}",
+        "lifecycle {\n    ignore_changes = [tags]\n  }",
         'provisioner "local-exec" {}',
-        'data "external" "x" {}',
-        'resource "null_resource" "x" {}',
-        'resource "terraform_data" "x" {}',
     ],
 )
-def test_static_gate_forbidden_hcl(hcl):
-    result = static_gate({"main.tf": hcl}, [], {"valid": True})
-    assert result.outcome is GateOutcome.REPAIR
+def test_static_gate_forbidden_hcl_inside_a_block_is_repaired(body):
+    text = f'resource "aws_vpc" "a" {{\n  {body}\n}}\n'
+    (f,) = static_gate({"main.tf": text}, [], {"valid": True}).findings
+    assert (f.outcome, f.address) == (GateOutcome.REPAIR, "aws_vpc.a")
 
 
-def test_static_gate_tools():
-    validate = {"valid": False, "diagnostics": [{"severity": "error", "summary": "Unsupported argument"}]}
-    secrets = [{"File": "ec2.tf", "StartLine": 9, "RuleID": "aws-access-token", "Secret": "AKIAXXXXXXXXXXXXXXXX"}]
-    tflint = [{"rule": {"severity": "error"}, "message": "bad type"}, {"rule": {"severity": "notice"}, "message": "x"}]
-    result = static_gate({"main.tf": 'resource "aws_vpc" "a" {}'}, ["main.tf"], validate, tflint, secrets)
-    assert len(result.findings) == 4
+@pytest.mark.parametrize(
+    "text", ['data "external" "x" {}', 'resource "null_resource" "x" {}', 'resource "terraform_data" "x" {}']
+)
+def test_static_gate_forbidden_hcl_outside_adopted_blocks_fails(text):
+    result = static_gate({"main.tf": text}, [], {"valid": True})
+    assert result.outcome in (GateOutcome.FAIL, GateOutcome.REPAIR) and not result.passed
+
+
+def test_static_gate_tools_locate_the_block():
+    text = (
+        'resource "aws_vpc" "a" {\n  cidr_block = "10.0.0.0/16"\n}\n\n'
+        'resource "aws_instance" "b" {\n  user_data = "x"\n}\n'
+    )
+    rng = lambda line: {"filename": "generated.tf", "start": {"line": line}}  # noqa: E731
+    validate = {
+        "valid": False,
+        "diagnostics": [{"severity": "error", "summary": "Unsupported argument", "range": rng(2)}],
+    }
+    secrets = [
+        {"File": "/tmp/w/generated.tf", "StartLine": 6, "RuleID": "aws-access-token", "Secret": "AKIAXXXXXXXXXXXXXXXX"}
+    ]
+    tflint = [
+        {"rule": {"severity": "error"}, "message": "bad type", "range": rng(2)},
+        {"rule": {"severity": "notice"}, "message": "x"},
+    ]
+    result = static_gate({"generated.tf": text}, ["generated.tf"], validate, tflint, secrets)
+    got = sorted((f.outcome.value, f.address, f.detail.get("kind")) for f in result.findings)
+    assert got == [
+        ("fail", None, None),  # fmt is run by the pipeline; still unformatted means a tool problem
+        ("repair", "aws_instance.b", "secret"),
+        ("repair", "aws_vpc.a", None),
+        ("repair", "aws_vpc.a", None),
+    ]
     assert "AKIA" not in json.dumps([f.model_dump() for f in result.findings])
     assert static_gate({"main.tf": ""}, [], {"valid": True}, [], []).passed
 

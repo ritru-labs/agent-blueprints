@@ -8,8 +8,10 @@ from __future__ import annotations
 
 import re
 from collections.abc import Iterable, Mapping
+from pathlib import Path
 from typing import Any
 
+from . import hcl
 from .models import Finding, GateOutcome, GateResult, ScopeItem
 
 # Text that must never appear in generated HCL. Provisioners and these
@@ -189,33 +191,44 @@ def static_gate(
     tflint_issues: list[dict] | None = None,
     secret_findings: list[dict] | None = None,
 ) -> GateResult:
+    """Findings carry the resource address when the problem is inside one block,
+    so the pipeline can repair (or, for secrets, skip) exactly that resource.
+    A finding without an address cannot be repaired and fails the run."""
+
+    def locate(filename: str | None, line: int | None) -> str | None:
+        name = Path(filename or "").name
+        return hcl.address_at_line(hcl_files[name], line) if name in hcl_files and line else None
+
+    def repair_or_fail(message: str, address: str | None, **detail: Any) -> Finding:
+        outcome = GO.REPAIR if address else GO.FAIL
+        return Finding(outcome=outcome, message=message, address=address, detail=detail)
+
     findings: list[Finding] = []
     for name, text in sorted(hcl_files.items()):
         for pattern, why in FORBIDDEN_HCL.items():
-            if re.search(pattern, text):
-                findings.append(Finding(outcome=GO.REPAIR, message=f"{name}: {why}"))
+            for m in re.finditer(pattern, text):
+                line = text.count("\n", 0, m.start()) + 1
+                findings.append(repair_or_fail(f"{name}:{line}: {why}", locate(name, line)))
     for name in unformatted:
-        findings.append(Finding(outcome=GO.REPAIR, message=f"{name}: not terraform fmt formatted"))
+        findings.append(Finding(outcome=GO.FAIL, message=f"{name}: not terraform fmt formatted"))
     if not validate.get("valid", False):
-        for d in validate.get("diagnostics", []):
-            findings.append(
-                Finding(
-                    outcome=GO.REPAIR,
-                    message=f"validate: {d.get('summary')}",
-                    detail={"detail": d.get("detail"), "range": d.get("range")},
-                )
-            )
-        if not validate.get("diagnostics"):
-            findings.append(Finding(outcome=GO.REPAIR, message="validate: invalid"))
+        for d in validate.get("diagnostics", []) or [{"summary": "invalid"}]:
+            rng = d.get("range") or {}
+            address = locate(rng.get("filename"), (rng.get("start") or {}).get("line"))
+            findings.append(repair_or_fail(f"validate: {d.get('summary')}", address, detail=d.get("detail")))
     for issue in tflint_issues or []:
         if issue.get("rule", {}).get("severity", "error") == "error":
-            findings.append(Finding(outcome=GO.REPAIR, message=f"tflint: {issue.get('message')}"))
+            rng = issue.get("range") or {}
+            address = locate(rng.get("filename"), (rng.get("start") or {}).get("line"))
+            findings.append(repair_or_fail(f"tflint: {issue.get('message')}", address))
     for leak in secret_findings or []:
-        # The secret itself is never copied into the finding.
+        # The secret is never copied into the finding, and its block is never sent to the LLM.
+        address = locate(leak.get("File"), leak.get("StartLine"))
         findings.append(
-            Finding(
-                outcome=GO.REPAIR,
-                message=f"secret in {leak.get('File')}:{leak.get('StartLine')} ({leak.get('RuleID')})",
+            repair_or_fail(
+                f"secret in {Path(leak.get('File') or '').name}:{leak.get('StartLine')} ({leak.get('RuleID')})",
+                address,
+                kind="secret",
             )
         )
     return GateResult(gate="static", findings=findings)

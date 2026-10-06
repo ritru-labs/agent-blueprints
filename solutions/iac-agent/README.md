@@ -4,7 +4,7 @@ Brings hand-built cloud infrastructure under Terraform state with **zero changes
 
 > **The promise:** no resource is created, updated, replaced or deleted. Proof is a `terraform plan` with 0 changes against the live cloud, checked by Terraform, not by the agent.
 
-Status: **V0 → V1**. Foundations done; the V1 agent is being built (`src/iac_agent/`). Nothing here touches a client account.
+Status: **V1 code complete, tested offline**. Not yet run against real AWS (needs the sandbox account). Nothing here touches a client account.
 
 ## Design in one minute
 
@@ -37,6 +37,7 @@ Full scope, failure-modes register, safety rules and test plan: [`docs/SCOPE_AND
 | --- | --- |
 | `tools.lock.json` | Exact tool versions for every run |
 | `src/iac_agent/core/` | Cloud-neutral core: models, guarded Terraform wrapper, gates, naming, reports |
+| `src/iac_agent/core/graph.py`, `cli.py` | The pipeline (LangGraph, two human approvals, repair loop, reports) and its CLI |
 | `src/iac_agent/adapters/aws/` | AWS adapter: read-only discovery, ownership classifier, fixed import IDs, opt-in best-effort lister |
 | `iam/scanner-policy.json` | Read-only discovery identity; explicit deny on everything else, including object and secret reads |
 | `iam/importer-policy.template.json` | Same reads plus Terraform state bucket and key only |
@@ -73,6 +74,19 @@ Fixture scripts refuse to run unless the credentials belong to `SANDBOX_ACCOUNT_
 | F7 forced replacement | VPC + subnet; manifest says which AZ to mutate in generated code | `hard_stop` at plan |
 
 F2 and F4 run a NAT gateway and/or a t3.micro: tear them down after each run.
+
+## Run the agent (sandbox only, once it exists)
+
+```sh
+W=runs/f2; R=f2-001; A=$SANDBOX_ACCOUNT_ID; G=$AWS_REGION
+iac-agent scan    --run-id $R --workdir $W --account $A --region $G   # stops: $W/scope_signoff.json
+iac-agent plan    --run-id $R --workdir $W --region $G [--scope approved.json] [--model-id <bedrock-model>]
+                                                                      # stops: $W/approve_plan.json
+iac-agent approve --run-id $R --workdir $W --region $G                # re-scan, import, verify, report
+```
+
+Without `--model-id` nothing is sent to an LLM: resources that need repair are skipped and reported.
+Output in the workdir: generated `.tf` files, `imports.tf`, `ADOPTION_REPORT.md`, `FINDINGS.md`, state backups.
 
 ## Notes
 

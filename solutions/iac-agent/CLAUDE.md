@@ -115,13 +115,15 @@ Fixtures are fake clients in a sandbox account, built with AWS CLI scripts (neve
 
 Every test run checks: gates behave as the manifest expects; state == adopt list; CloudTrail shows zero AWS writes; second run idempotent; golden files for F1/F2. `fixtures/teardown.sh` must remove everything each fixture creates; extend it with each fixture.
 
-## Current status (V0, branch `feat/iac-agent-v0`)
+## Current status (V1 code complete offline, branch `feat/iac-agent-v0`)
 
 Done: pinned tools (`tools.lock.json`), scanner/importer IAM with blanket NotAction deny (62 offline tests), live simulator check script, fixtures F1–F7 with manifests + guard + teardown for everything they create, offline dry-run of every fixture and teardown against a stub `aws` (`tests/stub_aws/aws`, 17 tests), CI workflow (`.github/workflows/iac-agent.yml`). Fixtures have not yet run against real AWS.
 
 V1 core (`src/iac_agent/core/`): pydantic models, guarded Terraform wrapper (pinned versions, refuses destroy/import/taint/state rm/-target/-replace, applies only the plan file whose hash passed the plan gate), gates (plan, config, static, coverage, fingerprint, verify) tested on recorded plan JSON in `tests/data/plans/`, deterministic naming, adoption and findings reports.
 
 AWS adapter (`src/iac_agent/adapters/aws/`): paginated read-only discovery for every certified type plus CloudFormation/Auto Scaling ownership signals (any error marks the whole group incomplete); ownership classifier with parent inheritance; fixed import ID formats; opt-in Cloud Control best-effort lister (no types enabled: the scanner role has no Cloud Control permissions). Tested with botocore Stubber on `tests/data/aws/account.json`; a test proves every discovery call is allowed by `iam/scanner-policy.json`.
+
+Pipeline (`src/iac_agent/core/graph.py`, `cli.py`): LangGraph graph for steps 1–10 with a SQLite checkpointer and `interrupt` at scope sign-off and final approval; Terraform's `-generate-config-out` as first draft; hardcoded IDs rewritten to references in code; LLM repair (Claude on Bedrock, no tools, one block at a time, max 3, else skip); blocks with secret findings or user data never reach the LLM; re-scan right after approval and before import (drift restarts, max 3); state backup before apply (no backup, no import); reports on every exit. CLI: `scan`, `plan`, `approve`, `reject`, `status`. Tested end to end with a fake cloud and a fake terraform binary behind the real wrapper (`tests/test_pipeline.py`).
 
 Ownership decision to confirm with Supraj: hand-built subnets, SGs and instances *inside* the default VPC are adopted (they reference the default VPC by ID); the default VPC itself, its default subnets, gateway, main route table, default SG/NACL and their rules/routes are excluded.
 
@@ -135,7 +137,7 @@ Waiting on Supraj: sandbox AWS account ID + region; confirmation of open decisio
 2. ~~Archive the old Pulumi branch: add a note at the top of its README saying it is reference only.~~ Done: `feat/infrastructure-migration-langgraph` README is marked archived.
 3. ~~V1 core skeleton: models, terraform wrapper, plan-JSON gate with unit tests on recorded plan JSON. No AWS calls yet.~~ Done.
 4. ~~AWS adapter: discovery + ownership classifier + import IDs, tested on recorded API responses.~~ Done.
-5. LangGraph pipeline with the two human interrupts; repair loop; reports.
+5. ~~LangGraph pipeline with the two human interrupts; repair loop; reports.~~ Done.
 6. Run F1–F7 in the sandbox once Supraj provides it.
 
 ## How to work

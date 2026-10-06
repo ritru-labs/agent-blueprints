@@ -82,6 +82,10 @@ class Terraform:
     def init(self) -> None:
         self._run("init", "-no-color", "-input=false")
 
+    def fmt_write(self) -> None:
+        """Rewrites .tf files into canonical format (text only)."""
+        self._run("fmt", "-recursive", "-list=false")
+
     def fmt_unformatted(self) -> list[str]:
         proc = self._run("fmt", "-check", "-list=true", "-recursive", ok_codes=(0, 3))
         return [line for line in proc.stdout.splitlines() if line.strip()]
