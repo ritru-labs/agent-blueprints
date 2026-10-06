@@ -93,7 +93,7 @@ fixtures/teardown.sh <run>                                  # always, even after
 
 The harness answers the human steps from the manifest (scope = its adopt list), runs `drift.sh` for F6,
 mutates the AZ for F7, and checks: outcome and step as expected, state == adopt list, second run gives
-the same code, no AWS write calls by the agent's sessions in CLOUDTRAIL, golden files (F1, F2).
+the same code, no AWS write calls by the agent's sessions in CloudTrail, golden files (F1, F2).
 Result: `fixtures/out/runs/<F>-<run>/HARNESS_RESULT.json`. Review `--golden update` output before committing it.
 
 ## Run the agent (sandbox only, once it exists)
