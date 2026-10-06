@@ -1,0 +1,38 @@
+# F4: resources owned by CloudFormation. The agent must exclude all of them.
+# Stack tags are copied to each resource next to the aws:cloudformation:* tags.
+AWSTemplateFormatVersion: "2010-09-09"
+Description: IaC agent fixture F4 - CloudFormation-owned network and launch template
+Parameters:
+  ImageId:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64
+Resources:
+  Vpc:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.45.0.0/16
+  Subnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      CidrBlock: 10.45.1.0/24
+      AvailabilityZone: !Select [0, !GetAZs ""]
+  SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: F4 CloudFormation-owned group
+      VpcId: !Ref Vpc
+  LaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateData:
+        ImageId: !Ref ImageId
+        InstanceType: t3.micro
+        SecurityGroupIds: [!Ref SecurityGroup]
+        MetadataOptions:
+          HttpTokens: required
+Outputs:
+  SubnetId:
+    Value: !Ref Subnet
+  LaunchTemplateId:
+    Value: !Ref LaunchTemplate

@@ -1,0 +1,9 @@
+{
+  "_comment": "Exact versions used for every run and test. Upgrades go through the full fixture suite before this file changes. Versions recorded 2026-10-06 from upstream release tags.",
+  "terraform": "1.16.5",
+  "terraform_provider_aws": "6.67.0",
+  "tflint": "0.64.0",
+  "checkov": "3.3.23",
+  "gitleaks": "8.30.1",
+  "tflint_ruleset_aws": "0.49.0"
+}

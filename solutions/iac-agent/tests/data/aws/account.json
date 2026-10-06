@@ -1,0 +1,879 @@
+{
+ "_comment": "Recorded-shape responses for one account mixing F2 (hand-built) and F4 (CloudFormation, ASG, default VPC, service-linked role). Calls are listed in the order discovery makes them; botocore Stubber validates every response against the service model.",
+ "ec2": [
+  [
+   "describe_vpcs",
+   {
+    "Vpcs": [
+     {
+      "VpcId": "vpc-0aaa",
+      "CidrBlock": "10.43.0.0/16",
+      "IsDefault": false,
+      "InstanceTenancy": "default",
+      "Tags": [
+       {
+        "Key": "Name",
+        "Value": "app-vpc"
+       }
+      ]
+     },
+     {
+      "VpcId": "vpc-0def",
+      "CidrBlock": "172.31.0.0/16",
+      "IsDefault": true,
+      "InstanceTenancy": "default"
+     }
+    ],
+    "NextToken": "page-2"
+   }
+  ],
+  [
+   "describe_vpcs",
+   {
+    "Vpcs": [
+     {
+      "VpcId": "vpc-0cf0",
+      "CidrBlock": "10.45.0.0/16",
+      "IsDefault": false,
+      "Tags": [
+       {
+        "Key": "aws:cloudformation:stack-name",
+        "Value": "iacfx-F4"
+       },
+       {
+        "Key": "Name",
+        "Value": "f4"
+       }
+      ]
+     }
+    ]
+   }
+  ],
+  [
+   "describe_subnets",
+   {
+    "Subnets": [
+     {
+      "SubnetId": "subnet-0a1",
+      "VpcId": "vpc-0aaa",
+      "CidrBlock": "10.43.1.0/24",
+      "AvailabilityZone": "eu-west-1a",
+      "MapPublicIpOnLaunch": true,
+      "DefaultForAz": false,
+      "Tags": [
+       {
+        "Key": "Name",
+        "Value": "public-a"
+       }
+      ]
+     },
+     {
+      "SubnetId": "subnet-0d1",
+      "VpcId": "vpc-0def",
+      "CidrBlock": "172.31.0.0/20",
+      "AvailabilityZone": "eu-west-1a",
+      "DefaultForAz": true
+     },
+     {
+      "SubnetId": "subnet-0b1",
+      "VpcId": "vpc-0def",
+      "CidrBlock": "172.31.48.0/20",
+      "AvailabilityZone": "eu-west-1b",
+      "DefaultForAz": false,
+      "Tags": [
+       {
+        "Key": "Name",
+        "Value": "hand-built-in-default-vpc"
+       }
+      ]
+     },
+     {
+      "SubnetId": "subnet-0c1",
+      "VpcId": "vpc-0cf0",
+      "CidrBlock": "10.45.1.0/24",
+      "AvailabilityZone": "eu-west-1a",
+      "DefaultForAz": false,
+      "Tags": [
+       {
+        "Key": "aws:cloudformation:stack-name",
+        "Value": "iacfx-F4"
+       }
+      ]
+     }
+    ]
+   }
+  ],
+  [
+   "describe_internet_gateways",
+   {
+    "InternetGateways": [
+     {
+      "InternetGatewayId": "igw-0aaa",
+      "Attachments": [
+       {
+        "VpcId": "vpc-0aaa",
+        "State": "available"
+       }
+      ],
+      "Tags": [
+       {
+        "Key": "Name",
+        "Value": "app-igw"
+       }
+      ]
+     },
+     {
+      "InternetGatewayId": "igw-0def",
+      "Attachments": [
+       {
+        "VpcId": "vpc-0def",
+        "State": "available"
+       }
+      ]
+     }
+    ]
+   }
+  ],
+  [
+   "describe_nat_gateways",
+   {
+    "NatGateways": [
+     {
+      "NatGatewayId": "nat-0aaa",
+      "SubnetId": "subnet-0a1",
+      "VpcId": "vpc-0aaa",
+      "State": "available",
+      "ConnectivityType": "public",
+      "NatGatewayAddresses": [
+       {
+        "AllocationId": "eipalloc-0aaa",
+        "NetworkInterfaceId": "eni-0a0",
+        "PublicIp": "203.0.113.10"
+       }
+      ],
+      "Tags": [
+       {
+        "Key": "Name",
+        "Value": "app-nat"
+       }
+      ]
+     }
+    ]
+   }
+  ],
+  [
+   "describe_addresses",
+   {
+    "Addresses": [
+     {
+      "AllocationId": "eipalloc-0aaa",
+      "PublicIp": "203.0.113.10",
+      "Domain": "vpc",
+      "NetworkInterfaceId": "eni-0a0",
+      "Tags": [
+       {
+        "Key": "Name",
+        "Value": "nat-eip"
+       }
+      ]
+     }
+    ]
+   }
+  ],
+  [
+   "describe_route_tables",
+   {
+    "RouteTables": [
+     {
+      "RouteTableId": "rtb-0a0",
+      "VpcId": "vpc-0aaa",
+      "Associations": [
+       {
+        "Main": true,
+        "RouteTableAssociationId": "rtbassoc-0m1",
+        "RouteTableId": "rtb-0a0"
+       }
+      ],
+      "Routes": [
+       {
+        "DestinationCidrBlock": "10.43.0.0/16",
+        "GatewayId": "local",
+        "Origin": "CreateRouteTable",
+        "State": "active"
+       }
+      ]
+     },
+     {
+      "RouteTableId": "rtb-0b0",
+      "VpcId": "vpc-0aaa",
+      "Tags": [
+       {
+        "Key": "Name",
+        "Value": "public-rt"
+       }
+      ],
+      "Associations": [
+       {
+        "Main": false,
+        "RouteTableAssociationId": "rtbassoc-0p1",
+        "RouteTableId": "rtb-0b0",
+        "SubnetId": "subnet-0a1"
+       }
+      ],
+      "Routes": [
+       {
+        "DestinationCidrBlock": "10.43.0.0/16",
+        "GatewayId": "local",
+        "Origin": "CreateRouteTable",
+        "State": "active"
+       },
+       {
+        "DestinationCidrBlock": "0.0.0.0/0",
+        "GatewayId": "igw-0aaa",
+        "Origin": "CreateRoute",
+        "State": "active"
+       },
+       {
+        "DestinationPrefixListId": "pl-0abc",
+        "GatewayId": "vpce-0abc",
+        "Origin": "CreateRoute",
+        "State": "active"
+       }
+      ]
+     },
+     {
+      "RouteTableId": "rtb-0d0",
+      "VpcId": "vpc-0def",
+      "Associations": [
+       {
+        "Main": true,
+        "RouteTableAssociationId": "rtbassoc-0d1",
+        "RouteTableId": "rtb-0d0"
+       }
+      ],
+      "Routes": [
+       {
+        "DestinationCidrBlock": "0.0.0.0/0",
+        "GatewayId": "igw-0def",
+        "Origin": "CreateRoute",
+        "State": "active"
+       }
+      ]
+     }
+    ]
+   }
+  ],
+  [
+   "describe_network_acls",
+   {
+    "NetworkAcls": [
+     {
+      "NetworkAclId": "acl-0aaa",
+      "VpcId": "vpc-0aaa",
+      "IsDefault": true
+     }
+    ]
+   }
+  ],
+  [
+   "describe_security_groups",
+   {
+    "SecurityGroups": [
+     {
+      "GroupId": "sg-0d0",
+      "GroupName": "default",
+      "VpcId": "vpc-0aaa",
+      "Description": "default VPC security group",
+      "OwnerId": "111122223333"
+     },
+     {
+      "GroupId": "sg-0e0",
+      "GroupName": "web",
+      "VpcId": "vpc-0aaa",
+      "Description": "Web tier",
+      "OwnerId": "111122223333",
+      "Tags": [
+       {
+        "Key": "Name",
+        "Value": "web"
+       }
+      ]
+     },
+     {
+      "GroupId": "sg-0cf",
+      "GroupName": "iacfx-F4-SecurityGroup-X",
+      "VpcId": "vpc-0cf0",
+      "Description": "F4",
+      "OwnerId": "111122223333"
+     }
+    ]
+   }
+  ],
+  [
+   "describe_security_group_rules",
+   {
+    "SecurityGroupRules": [
+     {
+      "SecurityGroupRuleId": "sgr-0d1",
+      "GroupId": "sg-0d0",
+      "IsEgress": false,
+      "IpProtocol": "-1",
+      "FromPort": -1,
+      "ToPort": -1,
+      "ReferencedGroupInfo": {
+       "GroupId": "sg-0d0"
+      }
+     },
+     {
+      "SecurityGroupRuleId": "sgr-0e1",
+      "GroupId": "sg-0e0",
+      "IsEgress": false,
+      "IpProtocol": "tcp",
+      "FromPort": 443,
+      "ToPort": 443,
+      "CidrIpv4": "0.0.0.0/0"
+     },
+     {
+      "SecurityGroupRuleId": "sgr-0e2",
+      "GroupId": "sg-0e0",
+      "IsEgress": true,
+      "IpProtocol": "-1",
+      "FromPort": -1,
+      "ToPort": -1,
+      "CidrIpv4": "0.0.0.0/0"
+     },
+     {
+      "SecurityGroupRuleId": "sgr-0c1",
+      "GroupId": "sg-0cf",
+      "IsEgress": true,
+      "IpProtocol": "-1",
+      "FromPort": -1,
+      "ToPort": -1,
+      "CidrIpv4": "0.0.0.0/0"
+     }
+    ]
+   }
+  ],
+  [
+   "describe_instances",
+   {
+    "Reservations": [
+     {
+      "Instances": [
+       {
+        "InstanceId": "i-0a0",
+        "SubnetId": "subnet-0a1",
+        "InstanceType": "t3.micro",
+        "ImageId": "ami-0abc",
+        "RootDeviceName": "/dev/xvda",
+        "Placement": {
+         "AvailabilityZone": "eu-west-1a"
+        },
+        "IamInstanceProfile": {
+         "Arn": "arn:aws:iam::111122223333:instance-profile/app-role",
+         "Id": "AIPAX"
+        },
+        "Tags": [
+         {
+          "Key": "Name",
+          "Value": "app"
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "Instances": [
+       {
+        "InstanceId": "i-0f0",
+        "SubnetId": "subnet-0c1",
+        "InstanceType": "t3.micro",
+        "ImageId": "ami-0abc",
+        "RootDeviceName": "/dev/xvda",
+        "Tags": [
+         {
+          "Key": "aws:autoscaling:groupName",
+          "Value": "iacfx-asg"
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  ],
+  [
+   "describe_volumes",
+   {
+    "Volumes": [
+     {
+      "VolumeId": "vol-0a1",
+      "AvailabilityZone": "eu-west-1a",
+      "Size": 8,
+      "VolumeType": "gp3",
+      "Encrypted": true,
+      "Attachments": [
+       {
+        "InstanceId": "i-0a0",
+        "Device": "/dev/xvda",
+        "VolumeId": "vol-0a1",
+        "State": "attached"
+       }
+      ]
+     },
+     {
+      "VolumeId": "vol-0a2",
+      "AvailabilityZone": "eu-west-1a",
+      "Size": 8,
+      "VolumeType": "gp3",
+      "Encrypted": true,
+      "Tags": [
+       {
+        "Key": "Name",
+        "Value": "app-data"
+       }
+      ],
+      "Attachments": [
+       {
+        "InstanceId": "i-0a0",
+        "Device": "/dev/sdf",
+        "VolumeId": "vol-0a2",
+        "State": "attached"
+       }
+      ]
+     },
+     {
+      "VolumeId": "vol-0f1",
+      "AvailabilityZone": "eu-west-1a",
+      "Size": 8,
+      "VolumeType": "gp3",
+      "Attachments": [
+       {
+        "InstanceId": "i-0f0",
+        "Device": "/dev/xvda",
+        "VolumeId": "vol-0f1",
+        "State": "attached"
+       }
+      ]
+     }
+    ]
+   }
+  ],
+  [
+   "describe_key_pairs",
+   {
+    "KeyPairs": [
+     {
+      "KeyName": "ops-key",
+      "KeyPairId": "key-0abc",
+      "KeyType": "ed25519"
+     }
+    ]
+   }
+  ],
+  [
+   "describe_network_interfaces",
+   {
+    "NetworkInterfaces": [
+     {
+      "NetworkInterfaceId": "eni-0a1",
+      "InterfaceType": "interface",
+      "RequesterManaged": false,
+      "Attachment": {
+       "InstanceId": "i-0a0",
+       "DeviceIndex": 0
+      }
+     },
+     {
+      "NetworkInterfaceId": "eni-0a0",
+      "InterfaceType": "nat_gateway",
+      "RequesterManaged": true,
+      "Description": "Interface for NAT Gateway nat-0aaa"
+     },
+     {
+      "NetworkInterfaceId": "eni-0f1",
+      "InterfaceType": "interface",
+      "RequesterManaged": false,
+      "Attachment": {
+       "InstanceId": "i-0f0",
+       "DeviceIndex": 0
+      }
+     }
+    ]
+   }
+  ],
+  [
+   "describe_launch_templates",
+   {
+    "LaunchTemplates": [
+     {
+      "LaunchTemplateId": "lt-0cf",
+      "LaunchTemplateName": "f4-lt",
+      "Tags": [
+       {
+        "Key": "aws:cloudformation:stack-name",
+        "Value": "iacfx-F4"
+       }
+      ]
+     }
+    ]
+   }
+  ]
+ ],
+ "iam": [
+  [
+   "list_roles",
+   {
+    "Roles": [
+     {
+      "Path": "/",
+      "RoleName": "app-role",
+      "RoleId": "AROAAPP-ROLEXXXX",
+      "Arn": "arn:aws:iam::111122223333:role/app-role",
+      "CreateDate": "2026-10-06T07:00:00Z",
+      "AssumeRolePolicyDocument": "%7B%22Version%22%3A%222012-10-17%22%7D",
+      "MaxSessionDuration": 3600
+     },
+     {
+      "Path": "/aws-service-role/autoscaling.amazonaws.com/",
+      "RoleName": "AWSServiceRoleForAutoScaling",
+      "RoleId": "AROAAWSSERVICERO",
+      "Arn": "arn:aws:iam::111122223333:role/aws-service-role/autoscaling.amazonaws.com/AWSServiceRoleForAutoScaling",
+      "CreateDate": "2026-10-06T07:00:00Z",
+      "AssumeRolePolicyDocument": "%7B%22Version%22%3A%222012-10-17%22%7D",
+      "MaxSessionDuration": 3600
+     }
+    ],
+    "IsTruncated": false
+   }
+  ],
+  [
+   "list_role_tags",
+   {
+    "Tags": [
+     {
+      "Key": "Name",
+      "Value": "app-role"
+     }
+    ],
+    "IsTruncated": false
+   }
+  ],
+  [
+   "list_role_policies",
+   {
+    "PolicyNames": [
+     "inline-logs"
+    ],
+    "IsTruncated": false
+   }
+  ],
+  [
+   "list_attached_role_policies",
+   {
+    "AttachedPolicies": [
+     {
+      "PolicyName": "AmazonSSMManagedInstanceCore",
+      "PolicyArn": "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+     },
+     {
+      "PolicyName": "app-read",
+      "PolicyArn": "arn:aws:iam::111122223333:policy/app-read"
+     }
+    ],
+    "IsTruncated": false
+   }
+  ],
+  [
+   "list_policies",
+   {
+    "Policies": [
+     {
+      "PolicyName": "app-read",
+      "Arn": "arn:aws:iam::111122223333:policy/app-read",
+      "Path": "/",
+      "DefaultVersionId": "v2"
+     }
+    ],
+    "IsTruncated": false
+   }
+  ],
+  [
+   "list_policy_tags",
+   {
+    "Tags": [],
+    "IsTruncated": false
+   }
+  ],
+  [
+   "list_instance_profiles",
+   {
+    "InstanceProfiles": [
+     {
+      "Path": "/",
+      "InstanceProfileName": "app-role",
+      "InstanceProfileId": "AIPAAPPROLE0000000",
+      "Arn": "arn:aws:iam::111122223333:instance-profile/app-role",
+      "CreateDate": "2026-10-06T07:00:00Z",
+      "Roles": [
+       {
+        "Path": "/",
+        "RoleName": "app-role",
+        "RoleId": "AROAAPP-ROLEXXXX",
+        "Arn": "arn:aws:iam::111122223333:role/app-role",
+        "CreateDate": "2026-10-06T07:00:00Z",
+        "AssumeRolePolicyDocument": "%7B%22Version%22%3A%222012-10-17%22%7D",
+        "MaxSessionDuration": 3600
+       }
+      ]
+     }
+    ],
+    "IsTruncated": false
+   }
+  ],
+  [
+   "list_instance_profile_tags",
+   {
+    "Tags": [],
+    "IsTruncated": false
+   }
+  ]
+ ],
+ "s3": [
+  [
+   "list_buckets",
+   {
+    "Buckets": [
+     {
+      "Name": "app-bucket",
+      "BucketRegion": "eu-west-1"
+     },
+     {
+      "Name": "bare-bucket",
+      "BucketRegion": "eu-west-1"
+     }
+    ]
+   }
+  ],
+  [
+   "get_bucket_tagging",
+   {
+    "TagSet": [
+     {
+      "Key": "Name",
+      "Value": "app-bucket"
+     }
+    ]
+   }
+  ],
+  [
+   "get_bucket_versioning",
+   {
+    "Status": "Enabled"
+   }
+  ],
+  [
+   "get_bucket_encryption",
+   {
+    "ServerSideEncryptionConfiguration": {
+     "Rules": [
+      {
+       "ApplyServerSideEncryptionByDefault": {
+        "SSEAlgorithm": "aws:kms"
+       },
+       "BucketKeyEnabled": true
+      }
+     ]
+    }
+   }
+  ],
+  [
+   "get_public_access_block",
+   {
+    "PublicAccessBlockConfiguration": {
+     "BlockPublicAcls": true,
+     "IgnorePublicAcls": true,
+     "BlockPublicPolicy": true,
+     "RestrictPublicBuckets": true
+    }
+   }
+  ],
+  [
+   "get_bucket_policy",
+   {
+    "Policy": "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Sid\":\"DenyInsecureTransport\",\"Effect\":\"Deny\",\"Principal\":\"*\",\"Action\":\"s3:*\",\"Resource\":\"arn:aws:s3:::app-bucket/*\",\"Condition\":{\"Bool\":{\"aws:SecureTransport\":\"false\"}}}]}"
+   }
+  ],
+  [
+   "get_bucket_lifecycle_configuration",
+   {
+    "Rules": [
+     {
+      "ID": "tidy",
+      "Status": "Enabled",
+      "Filter": {},
+      "NoncurrentVersionExpiration": {
+       "NoncurrentDays": 30
+      }
+     }
+    ]
+   }
+  ],
+  [
+   "get_bucket_ownership_controls",
+   {
+    "OwnershipControls": {
+     "Rules": [
+      {
+       "ObjectOwnership": "BucketOwnerEnforced"
+      }
+     ]
+    }
+   }
+  ],
+  [
+   "get_bucket_tagging",
+   {
+    "_error": "NoSuchTagSet"
+   }
+  ],
+  [
+   "get_bucket_versioning",
+   {}
+  ],
+  [
+   "get_bucket_encryption",
+   {
+    "ServerSideEncryptionConfiguration": {
+     "Rules": [
+      {
+       "ApplyServerSideEncryptionByDefault": {
+        "SSEAlgorithm": "AES256"
+       },
+       "BucketKeyEnabled": false
+      }
+     ]
+    }
+   }
+  ],
+  [
+   "get_public_access_block",
+   {
+    "PublicAccessBlockConfiguration": {
+     "BlockPublicAcls": true,
+     "IgnorePublicAcls": true,
+     "BlockPublicPolicy": true,
+     "RestrictPublicBuckets": true
+    }
+   }
+  ],
+  [
+   "get_bucket_policy",
+   {
+    "_error": "NoSuchBucketPolicy"
+   }
+  ],
+  [
+   "get_bucket_lifecycle_configuration",
+   {
+    "_error": "NoSuchLifecycleConfiguration"
+   }
+  ],
+  [
+   "get_bucket_ownership_controls",
+   {
+    "OwnershipControls": {
+     "Rules": [
+      {
+       "ObjectOwnership": "BucketOwnerEnforced"
+      }
+     ]
+    }
+   }
+  ]
+ ],
+ "cloudformation": [
+  [
+   "list_stacks",
+   {
+    "StackSummaries": [
+     {
+      "StackName": "iacfx-F4",
+      "CreationTime": "2026-10-06T07:00:00Z",
+      "StackStatus": "CREATE_COMPLETE"
+     },
+     {
+      "StackName": "old-stack",
+      "CreationTime": "2026-10-06T07:00:00Z",
+      "StackStatus": "DELETE_COMPLETE"
+     }
+    ]
+   }
+  ],
+  [
+   "list_stack_resources",
+   {
+    "StackResourceSummaries": [
+     {
+      "LogicalResourceId": "Vpc",
+      "PhysicalResourceId": "vpc-0cf0",
+      "ResourceType": "AWS::EC2::VPC",
+      "LastUpdatedTimestamp": "2026-10-06T07:00:00Z",
+      "ResourceStatus": "CREATE_COMPLETE"
+     },
+     {
+      "LogicalResourceId": "Subnet",
+      "PhysicalResourceId": "subnet-0c1",
+      "ResourceType": "AWS::EC2::Subnet",
+      "LastUpdatedTimestamp": "2026-10-06T07:00:00Z",
+      "ResourceStatus": "CREATE_COMPLETE"
+     },
+     {
+      "LogicalResourceId": "SecurityGroup",
+      "PhysicalResourceId": "sg-0cf",
+      "ResourceType": "AWS::EC2::SecurityGroup",
+      "LastUpdatedTimestamp": "2026-10-06T07:00:00Z",
+      "ResourceStatus": "CREATE_COMPLETE"
+     },
+     {
+      "LogicalResourceId": "LaunchTemplate",
+      "PhysicalResourceId": "lt-0cf",
+      "ResourceType": "AWS::EC2::LaunchTemplate",
+      "LastUpdatedTimestamp": "2026-10-06T07:00:00Z",
+      "ResourceStatus": "CREATE_COMPLETE"
+     }
+    ]
+   }
+  ]
+ ],
+ "autoscaling": [
+  [
+   "describe_auto_scaling_groups",
+   {
+    "AutoScalingGroups": [
+     {
+      "AutoScalingGroupName": "iacfx-asg",
+      "MinSize": 1,
+      "MaxSize": 1,
+      "DesiredCapacity": 1,
+      "DefaultCooldown": 300,
+      "AvailabilityZones": [
+       "eu-west-1a"
+      ],
+      "HealthCheckType": "EC2",
+      "CreatedTime": "2026-10-06T07:00:00Z",
+      "Instances": [
+       {
+        "InstanceId": "i-0f0",
+        "AvailabilityZone": "eu-west-1a",
+        "LifecycleState": "InService",
+        "HealthStatus": "Healthy",
+        "ProtectedFromScaleIn": false
+       }
+      ]
+     }
+    ]
+   }
+  ]
+ ]
+}

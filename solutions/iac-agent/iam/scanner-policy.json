@@ -1,0 +1,61 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "ReadCertifiedServiceConfig",
+      "Effect": "Allow",
+      "Action": [
+        "ec2:Describe*",
+        "iam:Get*",
+        "iam:List*",
+        "s3:ListAllMyBuckets",
+        "s3:ListBucket",
+        "s3:GetBucket*",
+        "s3:GetAccelerateConfiguration",
+        "s3:GetLifecycleConfiguration",
+        "s3:GetEncryptionConfiguration",
+        "s3:GetReplicationConfiguration"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "ReadOwnershipSignals",
+      "Effect": "Allow",
+      "Action": [
+        "cloudformation:DescribeStacks",
+        "cloudformation:ListStacks",
+        "cloudformation:ListStackResources",
+        "cloudformation:DescribeStackResources",
+        "autoscaling:DescribeAutoScalingGroups",
+        "autoscaling:DescribeAutoScalingInstances",
+        "tag:GetResources"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "DenyEverythingOutsideTheReadList",
+      "Effect": "Deny",
+      "NotAction": [
+        "ec2:Describe*",
+        "iam:Get*",
+        "iam:List*",
+        "s3:ListAllMyBuckets",
+        "s3:ListBucket",
+        "s3:GetBucket*",
+        "s3:GetAccelerateConfiguration",
+        "s3:GetLifecycleConfiguration",
+        "s3:GetEncryptionConfiguration",
+        "s3:GetReplicationConfiguration",
+        "cloudformation:DescribeStacks",
+        "cloudformation:ListStacks",
+        "cloudformation:ListStackResources",
+        "cloudformation:DescribeStackResources",
+        "autoscaling:DescribeAutoScalingGroups",
+        "autoscaling:DescribeAutoScalingInstances",
+        "tag:GetResources",
+        "sts:GetCallerIdentity"
+      ],
+      "Resource": "*"
+    }
+  ]
+}

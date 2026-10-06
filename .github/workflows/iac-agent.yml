@@ -1,0 +1,30 @@
+name: iac-agent
+
+on:
+  pull_request:
+    paths: ["solutions/iac-agent/**", ".github/workflows/iac-agent.yml"]
+  push:
+    branches: [main]
+    paths: ["solutions/iac-agent/**", ".github/workflows/iac-agent.yml"]
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: solutions/iac-agent
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -e ".[dev]" shellcheck-py
+      - name: Lint (ruff)
+        run: ruff check src tests && ruff format --check src tests
+      - name: "Tests (offline: IAM policies, gates on recorded plans, fixture dry runs)"
+        run: pytest -q tests
+      - name: Shell scripts lint
+        run: shellcheck -x -S style scripts/*.sh fixtures/*.sh fixtures/*/*.sh tests/stub_aws/aws

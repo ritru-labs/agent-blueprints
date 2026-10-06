@@ -1,0 +1,83 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "ReadCertifiedServiceConfig",
+      "Effect": "Allow",
+      "Action": [
+        "ec2:Describe*",
+        "iam:Get*",
+        "iam:List*",
+        "s3:ListAllMyBuckets",
+        "s3:ListBucket",
+        "s3:GetBucket*",
+        "s3:GetAccelerateConfiguration",
+        "s3:GetLifecycleConfiguration",
+        "s3:GetEncryptionConfiguration",
+        "s3:GetReplicationConfiguration"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "ReadWriteTerraformStateOnly",
+      "Effect": "Allow",
+      "Action": [
+        "s3:GetObject",
+        "s3:PutObject",
+        "s3:DeleteObject"
+      ],
+      "Resource": "arn:aws:s3:::REPLACE_STATE_BUCKET/*"
+    },
+    {
+      "Sid": "UseStateKeyOnly",
+      "Effect": "Allow",
+      "Action": [
+        "kms:Decrypt",
+        "kms:GenerateDataKey"
+      ],
+      "Resource": "REPLACE_STATE_KMS_KEY_ARN"
+    },
+    {
+      "Sid": "DenyEverythingOutsideTheReadListAndState",
+      "Effect": "Deny",
+      "NotAction": [
+        "ec2:Describe*",
+        "iam:Get*",
+        "iam:List*",
+        "s3:ListAllMyBuckets",
+        "s3:ListBucket",
+        "s3:GetBucket*",
+        "s3:GetAccelerateConfiguration",
+        "s3:GetLifecycleConfiguration",
+        "s3:GetEncryptionConfiguration",
+        "s3:GetReplicationConfiguration",
+        "s3:GetObject",
+        "s3:PutObject",
+        "s3:DeleteObject",
+        "kms:Decrypt",
+        "kms:GenerateDataKey",
+        "sts:GetCallerIdentity"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "DenyObjectAccessOutsideStateBucket",
+      "Effect": "Deny",
+      "Action": [
+        "s3:GetObject",
+        "s3:PutObject",
+        "s3:DeleteObject"
+      ],
+      "NotResource": "arn:aws:s3:::REPLACE_STATE_BUCKET/*"
+    },
+    {
+      "Sid": "DenyKeyUseOutsideStateKey",
+      "Effect": "Deny",
+      "Action": [
+        "kms:Decrypt",
+        "kms:GenerateDataKey"
+      ],
+      "NotResource": "REPLACE_STATE_KMS_KEY_ARN"
+    }
+  ]
+}
