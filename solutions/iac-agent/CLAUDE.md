@@ -105,7 +105,7 @@ Fixtures are fake clients in a sandbox account, built with AWS CLI scripts (neve
 
 | Fixture | Contents | Expected |
 | --- | --- | --- |
-| F1 minimal (done) | VPC, 2 subnets, IGW, route table | All adopted, 0 changes; defaults excluded |
+| F1 minimal | VPC, 2 subnets, IGW, route table | All adopted, 0 changes; defaults excluded |
 | F2 typical web stack | Public + private subnets, NAT + EIP, SGs with rules, IAM role + instance profile, EC2 + extra EBS, S3 with versioning, encryption, policy, lifecycle | All adopted, 0 changes |
 | F3 edge configs | Many/odd tags, SG self-reference and SG-to-SG rules, inline + managed IAM policies, bucket without explicit encryption | All adopted, 0 changes |
 | F4 must exclude | CloudFormation stack resources, ASG instance, default VPC, service-linked role | All excluded with reasons |
@@ -117,13 +117,15 @@ Every test run checks: gates behave as the manifest expects; state == adopt list
 
 ## Current status (V0, branch `feat/iac-agent-v0`)
 
-Done: pinned tools (`tools.lock.json`), scanner/importer IAM with blanket NotAction deny (62 offline tests in `tests/`), live simulator check script, F1 fixture + manifest + guard + teardown, CI workflow (`.github/workflows/iac-agent.yml`).
+Done: pinned tools (`tools.lock.json`), scanner/importer IAM with blanket NotAction deny (62 offline tests), live simulator check script, fixtures F1–F7 with manifests + guard + teardown for everything they create, offline dry-run of every fixture and teardown against a stub `aws` (`tests/stub_aws/aws`, 17 tests), CI workflow (`.github/workflows/iac-agent.yml`). Fixtures have not yet run against real AWS.
+
+Manifest decisions to confirm with Supraj: AWS-applied defaults that read back like explicit config (the allow-all egress rule on a new security group; SSE-S3, Block Public Access and BucketOwnerEnforced on a new bucket) are expected as **adopt**, because the API cannot tell them apart from hand-set values. Root volumes and primary ENIs are **excluded** (owned through `aws_instance`).
 
 Waiting on Supraj: sandbox AWS account ID + region; confirmation of open decisions (defaults: Terraform 1.16.x, Claude on Bedrock, flat files per service in V1, default VPC excluded, private repo until pilot).
 
 ## Next tasks, in order
 
-1. Fixtures F2–F7 with manifests; extend teardown (NAT, EIP, SGs, EC2, EBS, S3, IAM, CFN stack, ASG). Shellcheck clean. Dry-run with a stub `aws` on PATH.
+1. ~~Fixtures F2–F7 with manifests; extend teardown. Shellcheck clean. Dry-run with a stub `aws` on PATH.~~ Done.
 2. Archive the old Pulumi branch: add a note at the top of its README saying it is reference only.
 3. V1 core skeleton: models, terraform wrapper, plan-JSON gate with unit tests on recorded plan JSON. No AWS calls yet.
 4. AWS adapter: discovery + ownership classifier + import IDs, tested on recorded API responses.

@@ -3,6 +3,7 @@
 # Expected: every created resource adopted at 0 changes; the VPC's
 # AWS-created defaults (main route table, default SG, default NACL) excluded.
 set -euo pipefail
+# shellcheck source=fixtures/lib.sh
 source "$(dirname "$0")/../lib.sh"
 
 guard_sandbox
@@ -43,15 +44,6 @@ for s in "$sub_a" "$sub_b"; do
   manifest_add aws_route_table_association "${s}/${rtb}" adopt "created by fixture"
 done
 
-# AWS creates these with every VPC. V1 excludes default resources.
-main_rtb="$(aws ec2 describe-route-tables --filters Name=vpc-id,Values="$vpc" Name=association.main,Values=true \
-  --query 'RouteTables[0].RouteTableId' --output text)"
-default_sg="$(aws ec2 describe-security-groups --filters Name=vpc-id,Values="$vpc" Name=group-name,Values=default \
-  --query 'SecurityGroups[0].GroupId' --output text)"
-default_acl="$(aws ec2 describe-network-acls --filters Name=vpc-id,Values="$vpc" Name=default,Values=true \
-  --query 'NetworkAcls[0].NetworkAclId' --output text)"
-manifest_add aws_route_table "$main_rtb" exclude "AWS-created main route table"
-manifest_add aws_security_group "$default_sg" exclude "AWS-created default security group"
-manifest_add aws_network_acl "$default_acl" exclude "AWS-created default network ACL"
+manifest_vpc_defaults "$vpc"
 
 echo "F1 created (run $RUN). Manifest: $MANIFEST"

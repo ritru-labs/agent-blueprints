@@ -57,13 +57,13 @@ out="$(aws iam simulate-custom-policy --policy-input-list "$importer" \
       --action-names s3:PutObject s3:GetObject \
       --resource-arns "arn:aws:s3:::${STATE_BUCKET}/x.tfstate" \
       --query 'EvaluationResults[].EvalDecision' --output text)"
-[[ "$out" == $'allowed\tallowed' ]] && echo "ok   importer state bucket rw" \
-  || { echo "FAIL importer state bucket rw -> $out"; fail=1; }
+if [[ "$out" == $'allowed\tallowed' ]]; then echo "ok   importer state bucket rw"
+else echo "FAIL importer state bucket rw -> $out"; fail=1; fi
 out="$(aws iam simulate-custom-policy --policy-input-list "$importer" \
       --action-names s3:GetObject s3:PutObject \
       --resource-arns "arn:aws:s3:::some-other-bucket/data.csv" \
       --query 'EvaluationResults[].EvalDecision' --output text)"
-[[ "$out" != *allowed* ]] && echo "ok   importer other bucket denied" \
-  || { echo "FAIL importer other bucket -> $out"; fail=1; }
+if [[ "$out" != *allowed* ]]; then echo "ok   importer other bucket denied"
+else echo "FAIL importer other bucket -> $out"; fail=1; fi
 
 exit "$fail"

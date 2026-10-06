@@ -1,0 +1,69 @@
+#!/usr/bin/env bash
+# Offline stand-in for the AWS CLI, used by tests/test_fixtures_dry_run.py.
+# It never calls AWS. Each call is appended to $AWS_STUB_STATE/calls.log and the
+# output is a fake value shaped by the field the --query asks for, so fixture
+# scripts run end to end and write manifests with unique, well-formed IDs.
+#
+#   AWS_STUB_STATE      directory for calls.log and the ID counter (required)
+#   AWS_STUB_ACCOUNT    account returned by sts get-caller-identity (required)
+#   AWS_STUB_EMPTY      regex; a matching call prints "None", as for a missing resource
+#   AWS_STUB_TAG_VALUE  value returned by tag lookups (default: stub)
+set -euo pipefail
+state="${AWS_STUB_STATE:?set AWS_STUB_STATE}"
+echo "$*" >>"$state/calls.log"
+
+query="" logical="" prev=""
+for arg in "$@"; do
+  case "$prev" in
+    --query) query="$arg" ;;
+    --logical-resource-id) logical="$arg" ;;
+  esac
+  prev="$arg"
+done
+
+if [[ -n "${AWS_STUB_EMPTY:-}" && "$*" =~ $AWS_STUB_EMPTY ]]; then echo None; exit 0; fi
+
+n=$(($(cat "$state/n" 2>/dev/null || echo 0) + 1))
+echo "$n" >"$state/n"
+hex="$(printf '%017x' "$n")"
+tag_value="${AWS_STUB_TAG_VALUE:-stub}"
+
+case "$1 ${2:-}" in
+  "sts get-caller-identity") echo "${AWS_STUB_ACCOUNT:?}"; exit 0 ;;
+  "ssm get-parameter") echo "ami-$hex"; exit 0 ;;
+  "autoscaling describe-auto-scaling-groups")
+    # Once deleted, the group is gone.
+    if grep -q '^autoscaling delete-auto-scaling-group' "$state/calls.log"; then exit 0; fi ;;
+esac
+
+field="${query##*.}"
+field="${field//[^A-Za-z]/}"
+case "$field" in
+  VpcId) echo "vpc-$hex" ;;
+  SubnetId) echo "subnet-$hex" ;;
+  InternetGatewayId) echo "igw-$hex" ;;
+  RouteTableId) echo "rtb-$hex" ;;
+  RouteTableAssociationId) echo "rtbassoc-$hex" ;;
+  NetworkAclId) echo "acl-$hex" ;;
+  GroupId) echo "sg-$hex" ;;
+  SecurityGroupRuleId) echo "sgr-$hex" ;;
+  NatGatewayId) echo "nat-$hex" ;;
+  AllocationId) echo "eipalloc-$hex" ;;
+  InstanceId) echo "i-$hex" ;;
+  VolumeId) echo "vol-$hex" ;;
+  NetworkInterfaceId) echo "eni-$hex" ;;
+  ZoneName) printf 'stub-1a\tstub-1b\n' ;;
+  Arn | PolicyArn) echo "arn:aws:iam::${AWS_STUB_ACCOUNT}:policy/iacfx-stub-$hex" ;;
+  RoleName | InstanceProfileName | PolicyNames | Name | StackName | AutoScalingGroupName) echo "iacfx-stub-$hex" ;;
+  VersionId) echo v1 ;;
+  Value) echo "$tag_value" ;;
+  Tags | TagSet)
+    printf '[{"Key":"iac-agent-fixture","Value":"stub"},{"Key":"iac-agent-run","Value":"%s"}]\n' "$tag_value" ;;
+  PhysicalResourceId)
+    case "$logical" in
+      Vpc) echo "vpc-$hex" ;;
+      Subnet) echo "subnet-$hex" ;;
+      SecurityGroup) echo "sg-$hex" ;;
+      LaunchTemplate) echo "lt-$hex" ;;
+    esac ;;
+esac

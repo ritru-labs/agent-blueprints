@@ -22,7 +22,7 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install pytest shellcheck-py
-      - name: IAM policies cannot write (offline)
+      - name: IAM policies cannot write; fixtures dry-run against a stub aws (offline)
         run: pytest -q tests
       - name: Shell scripts lint
-        run: shellcheck -x -S warning scripts/*.sh fixtures/*.sh fixtures/*/create.sh
+        run: shellcheck -x -S style scripts/*.sh fixtures/*.sh fixtures/*/*.sh tests/stub_aws/aws
