@@ -1,5 +1,14 @@
 # Infrastructure Migration Agent
 
+> [!WARNING]
+> **Archived: reference only.** This branch is no longer maintained and will not be merged. Do not build on it or run its execution adapters.
+>
+> **Why:** it built services, PostgreSQL checkpoints, Docker runners and execution adapters before the core goal was proven on real fixtures.
+>
+> **Where the work continues:** [`solutions/iac-agent` on `feat/iac-agent-v0`](https://github.com/ritru-labs/agent-blueprints/tree/feat/iac-agent-v0/solutions/iac-agent). There is one goal: bring hand-built AWS infrastructure under Terraform state with **zero changes**, proven by `terraform plan`. Pulumi output returns in V3 and CloudFormation handoff in V4; see that folder's `docs/SCOPE_AND_ROADMAP.md`.
+>
+> **Still useful to read:** the Pulumi adapter (V3), the CloudFormation retain-and-release handling (V4), and the bounded-read and partial-coverage reporting ideas.
+
 A governed infrastructure migration agent built on LangGraph.
 
 This solution prepares infrastructure migration packages and implements governed ownership transfer to Pulumi. The LangGraph coordinator invokes focused discovery, assessment, advisory reasoning, migration planning, recovery planning, code generation and validation subgraphs before durable human package review. See [specialist contracts and checkpoint compatibility](docs/specialists.md). Separate execution adapters require exact approvals, resource locks, drift checks, and operation reconciliation.
