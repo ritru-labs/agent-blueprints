@@ -1,0 +1,11 @@
+ARG COMPILE_IMAGE
+FROM ${COMPILE_IMAGE}
+USER root
+ADD --checksum=sha256:e01a439cd1273819c9e836d86cc34c0bcca703a0dd06137c74053bcd49a45e6e https://github.com/pulumi/pulumi/releases/download/v3.267.0/pulumi-v3.267.0-linux-arm64.tar.gz /tmp/pulumi.tar.gz
+RUN tar -xzf /tmp/pulumi.tar.gz -C /opt && rm /tmp/pulumi.tar.gz
+ENV PATH=/opt/pulumi:$PATH
+RUN pulumi version
+ADD --checksum=sha256:29d06df3c2ff6a56b8b048d93bfe9e36d6a9719f5f741d57968a6d24ebb2acfd https://github.com/pulumi/pulumi-aws/releases/download/v7.48.0/pulumi-resource-aws-v7.48.0-linux-arm64.tar.gz /tmp/aws.tar.gz
+RUN mkdir -p /opt/pulumi-home/plugins/resource-aws-v7.48.0 && tar -xzf /tmp/aws.tar.gz -C /opt/pulumi-home/plugins/resource-aws-v7.48.0 && rm /tmp/aws.tar.gz
+ENV PULUMI_HOME=/opt/pulumi-home
+USER 65532:65532

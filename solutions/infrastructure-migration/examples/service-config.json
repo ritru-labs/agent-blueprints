@@ -1,0 +1,18 @@
+{
+  "issuer": "https://identity.example.test/",
+  "audience": "infra-migration",
+  "public_jwks_file": "approved-public-jwks.json",
+  "tenants": [
+    {
+      "tenant_id": "00000000-0000-4000-8000-000000000001",
+      "dsn_environment": "INFRA_TENANT_DATABASE",
+      "accounts": ["111111111111"],
+      "regions": ["us-east-1"],
+      "artifact_directory": "tenant-artifacts",
+      "members": [
+        {"subject": "REPLACE_WITH_APPROVED_ASSESSOR_SUBJECT", "roles": ["assessor"]},
+        {"subject": "REPLACE_WITH_APPROVED_REVIEWER_SUBJECT", "roles": ["reviewer"]}
+      ]
+    }
+  ]
+}

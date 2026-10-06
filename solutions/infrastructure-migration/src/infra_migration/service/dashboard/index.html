@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>Infrastructure Migration Agent · Ritru Labs</title>
+  <link rel="stylesheet" href="/dashboard/style.css">
+  <script src="/dashboard/app.js" defer></script>
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to workspace</a>
+<aside class="sidebar" aria-label="Workspace navigation">
+  <a class="brand" href="#main"><span class="brand-mark" aria-hidden="true">↗</span><span>ritru<span class="brand-sub">Infrastructure Migration Agent</span></span></a>
+  <span class="nav-label">WORKSPACE</span>
+  <nav><a class="nav-active" href="#workspace"><span aria-hidden="true">▦</span> Overview</a><a href="#new-run"><span aria-hidden="true">＋</span> Prepare a package</a><a href="#run-details"><span aria-hidden="true">▤</span> Package review</a></nav>
+  <div class="sidebar-note"><span class="small-dot" aria-hidden="true"></span><strong>Review before change</strong><p>Preparation and package review are available. Infrastructure changes remain disabled.</p></div>
+  <div class="sidebar-footer">RITRU LABS <span>Agent blueprints</span></div>
+</aside>
+<div class="shell">
+<header class="topbar"><span>Workspace <span class="slash">/</span> Infrastructure Migration Agent</span><span class="execution-badge"><span class="small-dot" aria-hidden="true"></span> Live execution disabled</span></header>
+<main id="main">
+  <div class="page-heading"><div><p class="eyebrow">AWS → PULUMI</p><h1>Migration workspace</h1><p class="muted">Assess existing infrastructure. Prepare code. Review with confidence.</p></div><a class="button secondary" href="#new-run">＋ New preparation</a></div>
+  <p id="script-required" class="notice error">Enable JavaScript to connect and use this workspace.</p>
+  <div id="notice" class="notice" role="status" aria-live="polite" hidden></div>
+  <section id="connection" class="card connection" aria-labelledby="connection-title">
+    <div><p class="eyebrow">ORGANIZATION ACCESS</p><h2 id="connection-title">Connect your workspace</h2><p class="muted">Use an approved organization access token. Your roles are checked by the service.</p></div>
+    <form id="connect-form" class="connect-form" method="post" action="/">
+      <label>Organization ID<input id="organization" name="organization" type="text" autocomplete="off" spellcheck="false" placeholder="Organization UUID" required></label>
+      <label>Access token<input id="access-token" name="access-token" type="password" autocomplete="off" spellcheck="false" maxlength="8192" required></label>
+      <button id="connect-button" class="button primary" type="submit" disabled>Connect workspace</button>
+    </form>
+    <p class="fine-print">Tokens stay in this tab’s memory and are cleared on disconnect or reload. Browser sign-in integration is still pending.</p>
+  </section>
+  <section id="session" class="session-strip" hidden aria-label="Connected organization"><span><span class="small-dot" aria-hidden="true"></span> Connected <strong id="session-org"></strong></span><span id="session-roles" class="muted"></span><button id="disconnect" class="text-button" type="button">Disconnect</button></section>
+  <section id="workspace" class="overview" aria-label="Workspace overview">
+    <div class="summary-card"><span class="metric-label">Loaded preparations</span><strong id="count-total">—</strong><span>From your current run list</span></div>
+    <div class="summary-card"><span class="metric-label">Awaiting review</span><strong id="count-review">—</strong><span>Packages ready for a decision</span></div>
+    <div class="summary-card"><span class="metric-label">In progress</span><strong id="count-active">—</strong><span>Queued or being prepared</span></div>
+    <div class="summary-card supported"><span class="metric-label">Current supported scope</span><strong>VPCs &amp; subnets</strong><span>AWS IPv4 → Pulumi TypeScript</span></div>
+  </section>
+  <div class="workspace-grid">
+    <section id="new-run" class="card" aria-labelledby="prepare-title">
+      <div class="section-heading"><div><p class="eyebrow">01 / PREPARE</p><h2 id="prepare-title">Bring your inventory</h2></div><span class="pill neutral">Snapshot assessment</span></div>
+      <p class="muted">Upload an inventory JSON file, then select the resources for this package. Uploaded snapshots stay unverified until live assessment.</p>
+      <form id="prepare-form" method="post" action="/">
+        <label class="upload-zone" for="inventory-file"><span class="upload-icon" aria-hidden="true">↑</span><strong>Choose an inventory snapshot</strong><span>JSON · under 900 KB · up to 1,000 resources</span><input id="inventory-file" type="file" accept=".json,application/json" disabled></label>
+        <div id="inventory-summary" class="inventory-summary" hidden></div>
+        <div id="selection" hidden>
+          <div class="selection-toolbar"><strong id="selection-count">0 selected</strong><button id="select-supported" class="text-button" type="button">Select supported</button></div>
+          <label class="search-label">Find a resource<input id="resource-search" type="search" placeholder="Search by resource ID or type"></label>
+          <div id="resource-list" class="resource-list" aria-label="Resource selection"></div>
+        </div>
+        <div class="form-footer"><span class="fine-print">Creates a review package. Makes no cloud changes.</span><button id="prepare-button" class="button primary" type="submit" disabled>Prepare package →</button></div>
+      </form>
+    </section>
+    <section class="card run-card" aria-labelledby="runs-title">
+      <div class="section-heading"><div><p class="eyebrow">02 / TRACK</p><h2 id="runs-title">Recent preparations</h2></div><button id="refresh" class="text-button" type="button" disabled>Refresh</button></div>
+      <p id="run-list-hint" class="muted">Connect to see your organization’s preparations.</p>
+      <div id="run-list" class="run-list"><div class="empty-state"><span aria-hidden="true">▤</span><strong>Your preparations will appear here</strong><p>Each run keeps its checks, generated code, and review decision together.</p></div></div>
+      <button id="load-more" class="button secondary full-width" type="button" hidden>Load more preparations</button>
+    </section>
+  </div>
+  <section id="run-details" class="card detail-card" aria-labelledby="detail-title">
+    <div class="section-heading"><div><p class="eyebrow">03 / REVIEW</p><h2 id="detail-title">Package details</h2></div><span id="detail-status" class="pill neutral">No run selected</span></div>
+    <p id="detail-empty" class="muted">Select a preparation to inspect its progress, checks, blockers, and generated files.</p>
+    <div id="detail-content" hidden>
+      <p id="detail-run" class="run-reference"></p>
+      <ol id="progress" class="progress" aria-label="Preparation stages"></ol>
+      <details id="planning-review" hidden><summary>Migration sequence and recovery requirements</summary><p class="fine-print">Recovery requires live qualification. These instructions do not authorize cloud changes.</p><div id="planning-summary"></div><ul id="recovery-actions" class="blockers"></ul></details>
+      <div class="detail-columns"><div><h3>Validation &amp; provenance</h3><div id="checks" class="checks"></div></div><div><h3>Blockers to live migration</h3><ul id="blockers" class="blockers"></ul></div></div>
+      <div id="code-review" class="code-review" hidden><div class="code-toolbar"><div><h3>Generated package</h3><span class="fine-print">Inspect code, observed inputs, and the exact import manifest.</span></div><label>File<select id="code-file" aria-label="Generated file"></select></label><button id="download" class="button secondary" type="button">Download package ↓</button></div><p id="code-format" class="code-format"></p><pre class="code"><code id="code-content"></code></pre></div>
+      <div class="review-footer"><div><strong id="review-guidance"></strong><p class="fine-print">A review decision records this package only. It cannot enable infrastructure changes.</p></div><div class="review-actions"><button id="cancel-run" class="text-button danger" type="button" hidden>Cancel preparation</button><button id="reject" class="button secondary" type="button" hidden>Reject package</button><button id="approve" class="button primary" type="button" hidden>Approve package</button></div></div>
+    </div>
+  </section>
+  <footer class="page-footer"><span>Governed preparation · Scope, checks, and review stay visible.</span><span>Live AWS qualification pending</span></footer>
+</main>
+</div>
+<dialog id="decision-dialog" aria-labelledby="decision-title"><form id="decision-form" method="post" action="/"><p class="eyebrow">PACKAGE DECISION</p><h2 id="decision-title">Approve this package?</h2><p id="decision-copy" class="muted"></p><label class="confirmation"><input id="decision-check" type="checkbox" required> I reviewed the generated files, validation results, and blockers.</label><p class="fine-print">Infrastructure changes remain disabled after this decision.</p><div class="dialog-actions"><button id="decision-close" class="button secondary" type="button">Go back</button><button id="decision-submit" class="button primary" type="submit">Confirm approval</button></div></form></dialog>
+</body>
+</html>

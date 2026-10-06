@@ -1,0 +1,11 @@
+{
+  "tenant_id": "00000000-0000-0000-0000-000000000001",
+  "run_id": "00000000-0000-0000-0000-000000000002",
+  "cloud": "aws",
+  "account_id": "000000000000",
+  "regions": [
+    "us-east-1"
+  ],
+  "workflow": "manual_adoption",
+  "target": "pulumi_typescript"
+}

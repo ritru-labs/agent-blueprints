@@ -1,0 +1,1 @@
+{"name":"infra-migration-runner","version":"1.0.0","private":true,"dependencies":{"@pulumi/aws":"7.48.0","@pulumi/pulumi":"3.267.0","typescript":"5.9.3"}}

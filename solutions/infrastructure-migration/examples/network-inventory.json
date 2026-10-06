@@ -1,0 +1,61 @@
+{
+  "scope": {
+    "tenant_id": "00000000-0000-0000-0000-000000000001",
+    "run_id": "00000000-0000-0000-0000-000000000002",
+    "cloud": "aws",
+    "account_id": "000000000000",
+    "regions": [
+      "us-east-1"
+    ],
+    "workflow": "manual_adoption",
+    "target": "pulumi_typescript"
+  },
+  "provenance": "synthetic_fixture",
+  "observed_at": "2026-10-04T00:00:00Z",
+  "coverage": "complete_fixture",
+  "gaps": [],
+  "resources": [
+    {
+      "resource_id": "vpc-fixture",
+      "resource_type": "AWS::EC2::VPC",
+      "account_id": "000000000000",
+      "region": "us-east-1",
+      "owner": "manual",
+      "dependencies": [],
+      "configuration": {
+        "cidrBlock": "10.0.0.0/16",
+        "instanceTenancy": "default",
+        "enableDnsSupport": true,
+        "enableDnsHostnames": true,
+        "enableNetworkAddressUsageMetrics": false,
+        "tags": {
+          "Name": "fixture-network"
+        }
+      },
+      "blockers": []
+    },
+    {
+      "resource_id": "subnet-fixture",
+      "resource_type": "AWS::EC2::Subnet",
+      "account_id": "000000000000",
+      "region": "us-east-1",
+      "owner": "manual",
+      "dependencies": [
+        "vpc-fixture"
+      ],
+      "configuration": {
+        "vpcId": "vpc-fixture",
+        "cidrBlock": "10.0.1.0/24",
+        "availabilityZoneId": "use1-az1",
+        "mapPublicIpOnLaunch": false,
+        "privateDnsHostnameTypeOnLaunch": "ip-name",
+        "enableResourceNameDnsARecordOnLaunch": false,
+        "enableResourceNameDnsAaaaRecordOnLaunch": false,
+        "tags": {
+          "source": "vpc-fixture"
+        }
+      },
+      "blockers": []
+    }
+  ]
+}
