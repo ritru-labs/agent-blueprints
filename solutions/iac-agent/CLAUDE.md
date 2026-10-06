@@ -138,7 +138,7 @@ Waiting on Supraj: sandbox AWS account ID + region; confirmation of open decisio
 3. ~~V1 core skeleton: models, terraform wrapper, plan-JSON gate with unit tests on recorded plan JSON. No AWS calls yet.~~ Done.
 4. ~~AWS adapter: discovery + ownership classifier + import IDs, tested on recorded API responses.~~ Done.
 5. ~~LangGraph pipeline with the two human interrupts; repair loop; reports.~~ Done.
-6. Run F1–F7 in the sandbox once Supraj provides it.
+6. Run F1–F7 in the sandbox once Supraj provides it. Ready: `scripts/install-tools.sh`, `scripts/sandbox-setup.sh`, `python -m iac_agent.harness <manifest>` (see README "Sandbox run"). Commit golden files for F1/F2 only after review.
 
 ## How to work
 

@@ -38,7 +38,12 @@ def _no_llm(block, problems):  # repair attempts fail and the resource is skippe
 def _graph(args, conn):
     session = boto3.Session(profile_name=args.profile) if args.profile else boto3.Session()
     repairer = (
-        BedrockRepairer(session.client("bedrock-runtime", region_name=args.region, config=TIMEOUTS), args.model_id)
+        BedrockRepairer(
+            boto3.Session(profile_name=args.llm_profile).client(
+                "bedrock-runtime", region_name=args.region, config=TIMEOUTS
+            ),
+            args.model_id,
+        )
         if args.model_id
         else _no_llm
     )
@@ -86,7 +91,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--workdir", type=Path, required=True)
     p.add_argument("--account", help="signed-off account ID (scan)")
     p.add_argument("--region", required=True)
-    p.add_argument("--profile")
+    p.add_argument("--profile", help="AWS profile of the read-only scanner role")
+    p.add_argument("--llm-profile", help="AWS profile for Bedrock (the scanner role cannot call it)")
     p.add_argument("--model-id", help="Bedrock model ID for repair; without it, nothing is sent to an LLM")
     p.add_argument("--state-file", type=Path, action="append", help="client Terraform state (repeatable)")
     p.add_argument("--backend", help="file with the backend block to use")

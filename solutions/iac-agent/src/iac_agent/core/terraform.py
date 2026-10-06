@@ -11,7 +11,7 @@ import hashlib
 import json
 import os
 import subprocess
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 
 from .models import GateResult
@@ -56,14 +56,17 @@ def check_args(args: Sequence[str]) -> None:
 
 
 class Terraform:
-    def __init__(self, workdir: Path, binary: str = "terraform", runner: Runner = subprocess.run):
+    def __init__(self, workdir: Path, binary: str = "terraform", runner: Runner = subprocess.run,
+                 env: Mapping[str, str] | None = None):  # fmt: skip
+        """env: extra environment, e.g. the importer role's short-lived credentials."""
         self.workdir = Path(workdir)
         self.binary = binary
         self.runner = runner
+        self.env = dict(env or {})
 
     def _run(self, *args: str, ok_codes: Sequence[int] = (0,)) -> subprocess.CompletedProcess:
         check_args(args)
-        env = {**os.environ, "TF_IN_AUTOMATION": "1", "TF_INPUT": "0", "CHECKPOINT_DISABLE": "1"}
+        env = {**os.environ, **self.env, "TF_IN_AUTOMATION": "1", "TF_INPUT": "0", "CHECKPOINT_DISABLE": "1"}
         proc = self.runner([self.binary, *args], cwd=self.workdir, env=env, capture_output=True, text=True, check=False)
         if proc.returncode not in ok_codes:
             raise TerraformError(f"terraform {' '.join(args)} exited {proc.returncode}: {proc.stderr[-2000:]}")

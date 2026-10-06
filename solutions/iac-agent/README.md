@@ -78,6 +78,24 @@ Fixture scripts refuse to run unless the credentials belong to `SANDBOX_ACCOUNT_
 
 F2 and F4 run a NAT gateway and/or a t3.micro: tear them down after each run.
 
+## Sandbox run (task 6)
+
+```sh
+cd solutions/iac-agent && pip install -e ".[dev]" && scripts/install-tools.sh
+export SANDBOX_ACCOUNT_ID=... AWS_REGION=...                # sandbox admin credentials in your shell
+scripts/sandbox-setup.sh                                    # state bucket + KMS key + agent roles
+source fixtures/out/sandbox.env && scripts/verify-iam-cannot-write.sh   # roles provably cannot write
+
+fixtures/F2-web-stack/create.sh                             # prints the run ID and manifest path
+python -m iac_agent.harness fixtures/out/F2-<run>.manifest.json --second-run --golden update --cloudtrail-wait 15
+fixtures/teardown.sh <run>                                  # always, even after a failure
+```
+
+The harness answers the human steps from the manifest (scope = its adopt list), runs `drift.sh` for F6,
+mutates the AZ for F7, and checks: outcome and step as expected, state == adopt list, second run gives
+the same code, no AWS write calls by the agent's sessions in CLOUDTRAIL, golden files (F1, F2).
+Result: `fixtures/out/runs/<F>-<run>/HARNESS_RESULT.json`. Review `--golden update` output before committing it.
+
 ## Run the agent (sandbox only, once it exists)
 
 ```sh

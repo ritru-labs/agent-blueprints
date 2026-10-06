@@ -19,6 +19,7 @@ from iac_agent.adapters.aws.import_ids import PATTERNS as IMPORT_ID
 ROOT = Path(__file__).resolve().parent.parent
 FIXTURES = ROOT / "fixtures"
 STUB_DIR = Path(__file__).resolve().parent / "stub_aws"
+SETUP = ROOT / "scripts" / "sandbox-setup.sh"
 ACCOUNT = "111122223333"
 SCRIPTS = {
     "F1": "F1-minimal-network",
@@ -188,7 +189,8 @@ def test_f7_records_an_az_mutation(tmp_path):
 
 
 def test_guard_refuses_another_account(tmp_path):
-    for script in [*(FIXTURES / s / "create.sh" for s in SCRIPTS.values()), FIXTURES / "teardown.sh"]:
+    scripts = [*(FIXTURES / s / "create.sh" for s in SCRIPTS.values()), FIXTURES / "teardown.sh", SETUP]
+    for script in scripts:
         (tmp_path / "calls.log").unlink(missing_ok=True)
         result = run(script, tmp_path, AWS_STUB_ACCOUNT="999999999999")
         assert result.returncode == 2, script
@@ -240,3 +242,22 @@ def test_teardown_leaves_iam_and_s3_of_other_runs(tmp_path):
     log = calls(tmp_path)
     for prefix in IAM_S3_DELETES:
         assert not any(c.startswith(prefix) for c in log), prefix
+
+
+def test_sandbox_setup_writes_the_harness_settings(tmp_path):
+    result = run(SETUP, tmp_path)
+    assert result.returncode == 0, result.stderr
+    settings = (tmp_path / "out" / "sandbox.env").read_text()
+    for key in ["SCANNER_ROLE_ARN", "IMPORTER_ROLE_ARN", "EXTERNAL_ID", "STATE_BUCKET", "STATE_KMS_KEY_ARN"]:
+        assert f"export {key}=" in settings, key
+    log = calls(tmp_path)
+    policies = [c for c in log if c.startswith("iam put-role-policy")]
+    assert len(policies) == 2 and not any("REPLACE_" in c for c in policies)  # templates filled in
+    assert any(c.startswith("kms enable-key-rotation") or c.startswith("kms describe-key") for c in log)
+
+    again = run(SETUP, tmp_path)  # idempotent; keeps the external ID
+    assert again.returncode == 0, again.stderr
+    ext = [line for line in settings.splitlines() if "EXTERNAL_ID" in line]
+    assert ext == [
+        line for line in (tmp_path / "out" / "sandbox.env").read_text().splitlines() if "EXTERNAL_ID" in line
+    ]
