@@ -57,8 +57,9 @@ def check_args(args: Sequence[str]) -> None:
 
 class Terraform:
     def __init__(self, workdir: Path, binary: str = "terraform", runner: Runner = subprocess.run,
-                 env: Mapping[str, str] | None = None):  # fmt: skip
-        """env: extra environment, e.g. the importer role's short-lived credentials."""
+                 env: Mapping[str, str | None] | None = None):  # fmt: skip
+        """env: extra environment, e.g. the importer role's short-lived credentials.
+        A None value removes the variable (AWS_PROFILE would otherwise win over those credentials)."""
         self.workdir = Path(workdir)
         self.binary = binary
         self.runner = runner
@@ -66,7 +67,8 @@ class Terraform:
 
     def _run(self, *args: str, ok_codes: Sequence[int] = (0,)) -> subprocess.CompletedProcess:
         check_args(args)
-        env = {**os.environ, **self.env, "TF_IN_AUTOMATION": "1", "TF_INPUT": "0", "CHECKPOINT_DISABLE": "1"}
+        merged = {**os.environ, **self.env, "TF_IN_AUTOMATION": "1", "TF_INPUT": "0", "CHECKPOINT_DISABLE": "1"}
+        env = {k: v for k, v in merged.items() if v is not None}
         proc = self.runner([self.binary, *args], cwd=self.workdir, env=env, capture_output=True, text=True, check=False)
         if proc.returncode not in ok_codes:
             raise TerraformError(f"terraform {' '.join(args)} exited {proc.returncode}: {proc.stderr[-2000:]}")
@@ -121,7 +123,13 @@ class Terraform:
         return self._run(*args, ok_codes=(0, 2)).returncode
 
     def state_list(self) -> list[str]:
-        return self._run("state", "list").stdout.split()
+        """Addresses in state; [] before the first import (terraform exits 1: "No state file was found!")."""
+        proc = self._run("state", "list", ok_codes=(0, 1))
+        if proc.returncode == 1:
+            if "No state file was found" in proc.stderr:
+                return []
+            raise TerraformError(f"terraform state list exited 1: {proc.stderr[-2000:]}")
+        return proc.stdout.split()
 
     def state_pull(self) -> str:
         """Raw state, for the backup taken before every import."""

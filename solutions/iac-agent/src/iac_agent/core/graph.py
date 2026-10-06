@@ -11,6 +11,7 @@ checkpointer (SQLite) makes a run resumable across processes.
 
 from __future__ import annotations
 
+import contextlib
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -26,6 +27,7 @@ from .gates import config_gate, coverage_gate, fingerprint_gate, plan_gate, stat
 from .models import Classification, Discovery, Finding, GateOutcome, GateResult, ScopeItem
 from .repair import DEFAULT_TOKEN_BUDGET, MAX_ATTEMPTS, Repairer, repair_block
 from .report import adoption_report, client_readme, findings_report
+from .scanners import ScannerError
 from .terraform import Terraform, TerraformError, sha256_file, tool_versions
 
 GENERATED, IMPORTS, PLANFILE = "generated.tf", "imports.tf", "tfplan"
@@ -88,6 +90,23 @@ class RunState(TypedDict, total=False):
 
 def _gate(state: RunState, result: GateResult) -> list[dict]:
     return [*state.get("gates", []), result.model_dump(mode="json")]
+
+
+def _failed(state: RunState, gate: str, message: str) -> RunState:
+    result = GateResult(gate=gate, findings=[Finding(outcome=GateOutcome.FAIL, message=message)])
+    return {"gates": _gate(state, result), "status": "failed"}
+
+
+def guarded(gate: str, node: Callable[[RunState], RunState]) -> Callable[[RunState], RunState]:
+    """A tool error (terraform, scanners) fails the run with a report instead of crashing it."""
+
+    def run(state: RunState) -> RunState:
+        try:
+            return node(state)
+        except (TerraformError, ScannerError) as e:
+            return _failed(state, gate, f"{type(e).__name__}: {e}")
+
+    return run
 
 
 def _active(state: RunState) -> list[ScopeItem]:
@@ -338,7 +357,14 @@ def build(deps: Deps, checkpointer: Any = None):
         except TerraformError as e:
             failed = GateResult(gate="import", findings=[Finding(outcome=GateOutcome.FAIL, message=f"no backup: {e}")])
             return {"gates": _gate(state, failed), "status": "failed"}
-        tf.apply(wd / PLANFILE, GateResult(**state["plan_gate"]))
+        try:
+            tf.apply(wd / PLANFILE, GateResult(**state["plan_gate"]))
+        except TerraformError as e:
+            update = _failed(state, "import", f"apply failed: {e}. Imports are idempotent: re-run, "
+                                              "or restore the state backup")  # fmt: skip
+            with contextlib.suppress(TerraformError):  # unreadable state: the failed gate says so
+                update["adopted"] = sorted({s.address for s in _active(state)} & set(tf.state_list()))
+            return update
         return {}
 
     # --- 10. Verify ----------------------------------------------------------------------
@@ -371,7 +397,10 @@ def build(deps: Deps, checkpointer: Any = None):
             gates=[GateResult(**g) for g in state.get("gates", [])],
         ) + f"\n\nRun status: **{state.get('status')}**\n")  # fmt: skip
         if code_files():
-            write("FINDINGS.md", findings_report(deps.scanners.checkov(wd)))
+            try:
+                write("FINDINGS.md", findings_report(deps.scanners.checkov(wd)))
+            except ScannerError as e:
+                write("FINDINGS.md", f"# Security findings\n\nThe security scan did not run: {e}\n")
         if state.get("status") == "adopted":
             write("README.md", client_readme(state["account"], state["region"], sorted(code_files()), tool_versions()))
         return {}
@@ -387,10 +416,11 @@ def build(deps: Deps, checkpointer: Any = None):
 
     g = StateGraph(RunState)
     for name, fn in [("guard", guard), ("discover", discover), ("classify", classify),
-                     ("scope_signoff", scope_signoff), ("generate", generate), ("static", static),
-                     ("plan", plan), ("repair", repair), ("llm_pause", llm_pause), ("approve", approve),
-                     ("rescan", rescan),
-                     ("import", import_), ("verify", verify), ("report", report)]:  # fmt: skip
+                     ("scope_signoff", scope_signoff), ("generate", guarded("generate", generate)),
+                     ("static", guarded("static", static)), ("plan", guarded("plan", plan)), ("repair", repair),
+                     ("llm_pause", llm_pause), ("approve", approve), ("rescan", rescan),
+                     ("import", guarded("import", import_)), ("verify", guarded("verify", verify)),
+                     ("report", report)]:  # fmt: skip
         g.add_node(name, fn)
     g.add_edge(START, "guard")
     g.add_conditional_edges("guard", go("discover"))

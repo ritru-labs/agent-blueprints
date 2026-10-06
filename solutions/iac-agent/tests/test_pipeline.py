@@ -446,3 +446,91 @@ def test_imports_stay_if_the_plan_is_not_clean_without_them(tmp_path):
     state = graph.invoke(Command(resume=True), CONFIG)
     assert state["status"] == "failed" and (tmp_path / "imports.tf").exists()
     assert "plan without imports.tf = 2" in (tmp_path / "ADOPTION_REPORT.md").read_text()
+
+
+# --- Review fixes ------------------------------------------------------------------
+
+
+def test_dates_in_attributes_do_not_look_like_drift():
+    from datetime import UTC, datetime
+
+    from iac_agent.core.models import Discovery
+
+    fresh = Resource(terraform_type="aws_s3_bucket_lifecycle_configuration", import_id="b",
+                     attributes={"config": [{"Expiration": {"Date": datetime(2027, 1, 1, tzinfo=UTC)}}]})  # fmt: skip
+    found = Discovery(account=ACCOUNT, region=REGION, resources=[fresh])
+    reloaded = Discovery(**found.model_dump(mode="json"))  # what the checkpoint holds
+    assert reloaded.fingerprints() == found.fingerprints()
+
+
+class FailingCLI(FakeTerraformCLI):
+    """Fails one terraform subcommand the way a missing IAM read permission would."""
+
+    def __init__(self, fail_on, **kwargs):
+        super().__init__(**kwargs)
+        self.fail_on = fail_on
+
+    def __call__(self, cmd, cwd, **kwargs):
+        result = super().__call__(cmd, cwd, **kwargs)
+        if self.fail_on(cmd[1:]):
+            result.returncode, result.stderr = 1, "Error: AccessDenied: ec2:DescribeInstanceCreditSpecifications"
+        return result
+
+
+@pytest.mark.parametrize(
+    ("name", "fail_on"),
+    [
+        ("plan", lambda a: a[0] == "plan" and "-generate-config-out=generated.tf" not in a and "-out=tfplan" in a),
+        ("verify", lambda a: a[0] == "plan" and "-refresh-only" in a),
+    ],
+)
+def test_terraform_errors_fail_the_run_with_a_report(tmp_path, name, fail_on):
+    graph, _, _ = make(tmp_path, cli=FailingCLI(fail_on))
+    graph.invoke(start_state("r1", ACCOUNT, REGION), CONFIG)
+    state = graph.invoke(Command(resume="all"), CONFIG)
+    if pending(graph):
+        state = graph.invoke(Command(resume=True), CONFIG)
+    assert state["status"] == "failed"
+    report = (tmp_path / "ADOPTION_REPORT.md").read_text()
+    assert "AccessDenied: ec2:DescribeInstanceCreditSpecifications" in report and f"| {name} | fail |" in report
+
+
+def test_failed_apply_reports_what_reached_state(tmp_path):
+    class HalfApply(FakeTerraformCLI):
+        def __call__(self, cmd, cwd, **kwargs):
+            result = super().__call__(cmd, cwd, **kwargs)
+            if cmd[1] == "apply":
+                self.state = self.state[:1]
+                result.returncode, result.stderr = 1, "Error: throttled mid-import"
+            return result
+
+    graph, _, cli = make(tmp_path, cli=HalfApply())
+    run_to_approval(graph)
+    state = graph.invoke(Command(resume=True), CONFIG)
+    assert state["status"] == "failed" and len(state["adopted"]) == 1
+    assert "re-run, or restore the state backup" in (tmp_path / "ADOPTION_REPORT.md").read_text()
+
+
+def test_terraform_env_can_remove_aws_profile(tmp_path, monkeypatch):
+    monkeypatch.setenv("AWS_PROFILE", "my-admin")
+    seen = {}
+
+    def runner(cmd, **kwargs):
+        seen.update(kwargs["env"])
+        return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+
+    Terraform(tmp_path, runner=runner, env={"AWS_ACCESS_KEY_ID": "ASIA...", "AWS_PROFILE": None}).init()
+    assert "AWS_PROFILE" not in seen and seen["AWS_ACCESS_KEY_ID"] == "ASIA..."
+
+
+def test_secret_scanners_see_only_tf_files(tmp_path):
+    from iac_agent.core.scanners import _tf_only
+
+    (tmp_path / "network.tf").write_text("x")
+    (tmp_path / ".terraform").mkdir()
+    (tmp_path / ".terraform" / "provider").write_text("binary")
+    (tmp_path / "state-backups").mkdir()
+    (tmp_path / "state-backups" / "r1.tfstate").write_text('{"password": "s3cret"}')
+    (tmp_path / "scan").mkdir()  # in use: a fresh TemporaryDirectory
+    out = _tf_only(tmp_path, str(tmp_path / "scan"))
+    assert [p.name for p in out.rglob("*")] == ["network.tf"]

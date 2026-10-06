@@ -16,7 +16,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import re
 import subprocess
 import sys
@@ -203,7 +202,6 @@ def main(argv: list[str] | None = None) -> int:  # pragma: no cover - needs the 
     if base.client("sts").get_caller_identity()["Account"] != manifest.account:
         print("Refusing: credentials are not for the manifest's sandbox account", file=sys.stderr)
         return 2
-    os.environ.pop("AWS_PROFILE", None)  # Terraform must use the importer session only
     started = datetime.now(UTC)
     result = Result(manifest.fixture, manifest.run)
 
@@ -219,7 +217,8 @@ def main(argv: list[str] | None = None) -> int:  # pragma: no cover - needs the 
         scanner = boto3.Session(aws_access_key_id=sc["AccessKeyId"], aws_secret_access_key=sc["SecretAccessKey"],
                                 aws_session_token=sc["SessionToken"], region_name=manifest.region)  # fmt: skip
         tf_env = {"AWS_ACCESS_KEY_ID": im["AccessKeyId"], "AWS_SECRET_ACCESS_KEY": im["SecretAccessKey"],
-                  "AWS_SESSION_TOKEN": im["SessionToken"], "AWS_REGION": manifest.region}  # fmt: skip
+                  "AWS_SESSION_TOKEN": im["SessionToken"], "AWS_REGION": manifest.region,
+                  "AWS_PROFILE": None, "AWS_DEFAULT_PROFILE": None}  # fmt: skip
         backend = (f'terraform {{\n  backend "s3" {{\n    bucket       = "{env["STATE_BUCKET"]}"\n'
                    f'    key          = "{state_key}"\n    region       = "{manifest.region}"\n'
                    f'    encrypt      = true\n    kms_key_id   = "{env["STATE_KMS_KEY_ARN"]}"\n'

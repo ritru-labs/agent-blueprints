@@ -42,9 +42,9 @@ class Resource(BaseModel):
 
     def fingerprint(self) -> str:
         """Hash of everything the generated code depends on; any change means re-scan."""
-        body = json.dumps(
-            [self.terraform_type, self.import_id, self.tags, self.attributes], sort_keys=True, default=str
-        )
+        # JSON-mode dump first, so a resource read fresh from the cloud and one reloaded from the
+        # run checkpoint (dates already strings) hash the same.
+        body = json.dumps(self.model_dump(mode="json", exclude={"name"}), sort_keys=True)
         return hashlib.sha256(body.encode()).hexdigest()
 
 

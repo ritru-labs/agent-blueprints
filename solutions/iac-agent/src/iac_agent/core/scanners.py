@@ -28,6 +28,15 @@ def _check_version(tool: str, output: str) -> None:
         raise ScannerError(f"{tool} is not the pinned {pinned}: {output.strip()[:200]}")
 
 
+def _tf_only(workdir: Path, tmp: str) -> Path:
+    """A copy of just the .tf files: never .terraform/ (providers) or state backups (secrets)."""
+    out = Path(tmp) / "code"
+    out.mkdir()
+    for path in workdir.glob("*.tf"):
+        (out / path.name).write_text(path.read_text())
+    return out
+
+
 class Scanners:
     def tflint(self, workdir: Path) -> list[dict]:
         _check_version("tflint", _run(["tflint", "--version"], workdir).stdout)
@@ -38,14 +47,15 @@ class Scanners:
         _check_version("gitleaks", _run(["gitleaks", "version"], workdir).stdout)
         with tempfile.TemporaryDirectory() as tmp:
             report = Path(tmp) / "leaks.json"
-            _run(["gitleaks", "dir", str(workdir), "--no-banner", "--redact", "--report-format=json",
+            _run(["gitleaks", "dir", str(_tf_only(workdir, tmp)), "--no-banner", "--redact", "--report-format=json",
                   f"--report-path={report}", "--exit-code=0"], workdir)  # fmt: skip
             return json.loads(report.read_text() or "[]")
 
     def checkov(self, workdir: Path) -> list[dict]:
         _check_version("checkov", _run(["checkov", "--version"], workdir).stdout)
-        out = _run(["checkov", "-d", str(workdir), "--framework", "terraform", "-o", "json", "--quiet",
-                    "--soft-fail"], workdir).stdout  # fmt: skip
+        with tempfile.TemporaryDirectory() as tmp:
+            out = _run(["checkov", "-d", str(_tf_only(workdir, tmp)), "--framework", "terraform", "-o", "json",
+                        "--quiet", "--soft-fail"], workdir).stdout  # fmt: skip
         data = json.loads(out or "{}")
         reports = data if isinstance(data, list) else [data]
         return [c for r in reports for c in r.get("results", {}).get("failed_checks", [])]

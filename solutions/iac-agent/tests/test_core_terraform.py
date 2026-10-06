@@ -93,3 +93,16 @@ def test_automation_env_and_cwd(tmp_path):
 
     assert Terraform(tmp_path, runner=runner).state_list() == ["a", "b"]
     assert seen["cwd"] == tmp_path and seen["env"]["TF_INPUT"] == "0" and seen["check"] is False
+
+
+def test_state_list_before_any_import_is_empty(tmp_path):
+    def runner(cmd, **kwargs):
+        return subprocess.CompletedProcess(cmd, 1, stdout="", stderr="No state file was found!\n")
+
+    assert Terraform(tmp_path, runner=runner).state_list() == []
+
+    def broken(cmd, **kwargs):
+        return subprocess.CompletedProcess(cmd, 1, stdout="", stderr="Error: AccessDenied on state bucket")
+
+    with pytest.raises(TerraformError, match="AccessDenied"):
+        Terraform(tmp_path, runner=broken).state_list()
