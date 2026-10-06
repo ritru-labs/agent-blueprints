@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sqlite3
 import sys
 from pathlib import Path
@@ -25,7 +26,7 @@ from .adapters.aws.adapter import AwsAdapter
 from .core.graph import Deps, build, start_state
 from .core.repair import BedrockRepairer
 from .core.scanners import Scanners
-from .core.terraform import Terraform
+from .core.terraform import LOCK_FILE, Terraform
 
 
 def _no_llm(block, problems):  # repair attempts fail and the resource is skipped
@@ -68,6 +69,13 @@ def _show(graph, config, workdir: Path) -> int:
     return 0 if values.get("status") in ("adopted", "nothing_to_adopt") else 1
 
 
+def use_pinned_tools() -> None:
+    """Prefer the tools scripts/install-tools.sh put in .tools/bin (exact pinned versions)."""
+    tools = LOCK_FILE.parent / ".tools" / "bin"
+    if tools.is_dir():
+        os.environ["PATH"] = f"{tools}{os.pathsep}{os.environ.get('PATH', '')}"
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="iac-agent")
     p.add_argument("command", choices=["scan", "plan", "approve", "reject", "status"])
@@ -81,6 +89,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--backend", help="file with the backend block to use")
     p.add_argument("--scope", type=Path, help="plan: JSON list of [type, import_id] to adopt, or omit for all")
     args = p.parse_args(argv)
+    use_pinned_tools()
     args.workdir.mkdir(parents=True, exist_ok=True)
 
     with sqlite3.connect(args.workdir / "run.sqlite", check_same_thread=False) as conn:

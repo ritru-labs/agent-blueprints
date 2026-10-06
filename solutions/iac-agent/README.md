@@ -54,6 +54,9 @@ cd solutions/iac-agent
 pip install -e ".[dev]"
 pytest -q                       # offline: policies, gates on recorded plans, fixture dry runs (needs jq)
 
+scripts/install-tools.sh        # exact pinned terraform/tflint/gitleaks/checkov into .tools/ (checksummed)
+IAC_AGENT_REAL_TOOLS=1 pytest -q tests/test_real_tools.py   # real binaries on sample output, no AWS
+
 # In the sandbox account only:
 export SANDBOX_ACCOUNT_ID=... AWS_REGION=...
 STATE_BUCKET=... STATE_KMS_KEY_ARN=... scripts/verify-iam-cannot-write.sh
