@@ -346,6 +346,15 @@ def build(deps: Deps, checkpointer: Any = None):
         active = _active(state)
         in_state = tf.state_list()
         result = verify_gate(tf.detailed_exitcode(), tf.detailed_exitcode(refresh_only=True), in_state, active)
+        if result.passed:
+            # Import blocks are kept for audit, then removed; the plan must still be clean without them.
+            audit = wd / "audit"
+            audit.mkdir(exist_ok=True)
+            kept = audit / f"imports-{state['run_id']}.tf"
+            (wd / IMPORTS).replace(kept)
+            if (code := tf.detailed_exitcode()) != 0:
+                kept.replace(wd / IMPORTS)
+                result.findings.append(Finding(outcome=GateOutcome.FAIL, message=f"plan without imports.tf = {code}"))
         return {
             "gates": _gate(state, result),
             "adopted": sorted({s.address for s in active} & set(in_state)),

@@ -182,6 +182,8 @@ def test_happy_path_adopts_exactly_the_signed_off_scope(tmp_path):
     assert state["adopted"] == ["aws_subnet.subnet_app", "aws_vpc.vpc_main"]
     assert len(applied(cli)) == 1 and cloud.discoveries == 2  # scan + re-scan before import
     assert not (tmp_path / "generated.tf").exists()
+    assert not (tmp_path / "imports.tf").exists()  # kept for audit, then removed
+    assert "aws_vpc.vpc_main" in (tmp_path / "audit" / "imports-r1.tf").read_text()
     assert sorted(hcl.blocks((tmp_path / "network.tf").read_text())) == ["aws_subnet.subnet_app", "aws_vpc.vpc_main"]
     assert "terraform plan" in (tmp_path / "README.md").read_text()  # client README on success
     report = (tmp_path / "ADOPTION_REPORT.md").read_text()
@@ -257,7 +259,7 @@ def test_repair_gives_up_after_three_attempts_and_skips(tmp_path):
     state = graph.invoke(Command(resume=True), CONFIG)
     assert state["status"] == "adopted" and state["adopted"] == ["aws_vpc.vpc_main"]
     assert state["skipped"]["aws_subnet.subnet_app"].startswith("repair failed 3 times")
-    assert "aws_subnet.subnet_app" not in (tmp_path / "imports.tf").read_text()
+    assert "aws_subnet.subnet_app" not in (tmp_path / "audit" / "imports-r1.tf").read_text()
     assert (
         "| aws_subnet.subnet_app | subnet-0b2 | repair failed 3 times" in (tmp_path / "ADOPTION_REPORT.md").read_text()
     )
@@ -429,3 +431,18 @@ def test_stop_after_an_llm_pause_imports_nothing(tmp_path):
     state = graph.invoke(Command(resume="stop"), CONFIG)
     assert state["status"] == "failed" and not applied(cli)
     assert "budget of 0 used" in (tmp_path / "ADOPTION_REPORT.md").read_text()
+
+
+def test_imports_stay_if_the_plan_is_not_clean_without_them(tmp_path):
+    class DirtyAfterImportsRemoved(FakeTerraformCLI):
+        def __call__(self, cmd, cwd, **kwargs):
+            result = super().__call__(cmd, cwd, **kwargs)
+            if "-detailed-exitcode" in cmd and not (Path(cwd) / "imports.tf").exists():
+                result.returncode = 2
+            return result
+
+    graph, _, _ = make(tmp_path, cli=DirtyAfterImportsRemoved())
+    run_to_approval(graph)
+    state = graph.invoke(Command(resume=True), CONFIG)
+    assert state["status"] == "failed" and (tmp_path / "imports.tf").exists()
+    assert "plan without imports.tf = 2" in (tmp_path / "ADOPTION_REPORT.md").read_text()
