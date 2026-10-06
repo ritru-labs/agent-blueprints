@@ -7,6 +7,7 @@ resources with F4-style CloudFormation, ASG, default-VPC and service-linked ones
 
 import copy
 import json
+import re
 from pathlib import Path
 
 import boto3
@@ -295,3 +296,72 @@ def test_every_certified_type_has_a_service_file():
     assert set(files.values()) == {"network.tf", "security_groups.tf", "s3.tf", "iam.tf", "ec2.tf"}
     assert files["aws_vpc_security_group_egress_rule"] == "security_groups.tf"
     assert files["aws_s3_bucket_policy"] == "s3.tf" and files["aws_iam_instance_profile"] == "iam.tf"
+
+
+# --- F3 edge configs ------------------------------------------------------------------
+
+F3 = json.loads((Path(__file__).parent / "data" / "aws" / "f3_edges.json").read_text())
+
+
+@pytest.fixture
+def f3():
+    factory, stubbers = stubbed(F3)
+    result = discover(factory, "111122223333", "eu-west-1")
+    for s in stubbers:
+        s.assert_no_pending_responses()
+    return result
+
+
+def test_f3_odd_tags_survive_exactly(f3):
+    from iac_agent.core.models import Discovery
+
+    (vpc,) = [r for r in f3.resources if r.terraform_type == "aws_vpc"]
+    assert len(vpc.tags) == 50 and vpc.name == "f3-vpc"
+    assert vpc.tags["template"] == "${var.not_a_reference} %{if true}x%{endif}"
+    assert vpc.tags["quote"] == 'say "hi" \\ back' and vpc.tags["empty"] == "" and vpc.tags["Ünïcødé"] == "日本語 – ✓"
+    # Fingerprints survive the checkpoint round trip, including the lifecycle date botocore parsed.
+    assert Discovery(**f3.model_dump(mode="json")).fingerprints() == f3.fingerprints()
+
+
+def test_f3_classification(f3):
+    got = by_key(classify(f3))
+    adopt = {k for k, c in got.items() if c.adoptable}
+    assert adopt == {
+        ("aws_vpc", "vpc-0f3"),
+        ("aws_security_group", "sg-0a1"),
+        ("aws_security_group", "sg-0db"),
+        ("aws_security_group", "sg-0c1"),
+        ("aws_vpc_security_group_ingress_rule", "sgr-0a1"),
+        ("aws_vpc_security_group_egress_rule", "sgr-0a2"),
+        ("aws_vpc_security_group_egress_rule", "sgr-0a3"),  # SG-to-SG egress
+        ("aws_vpc_security_group_ingress_rule", "sgr-0b1"),  # SG-to-SG ingress
+        ("aws_vpc_security_group_ingress_rule", "sgr-0c1"),  # self-reference
+        ("aws_vpc_security_group_egress_rule", "sgr-0c2"),
+        ("aws_iam_role", "iacfx-f3-r-edge"),  # non-root path is still hand-built
+        ("aws_iam_role_policy", "iacfx-f3-r-edge:inline-logs"),
+        ("aws_iam_policy", "arn:aws:iam::111122223333:policy/iacfx-f3-r-read"),
+        ("aws_iam_role_policy_attachment", "iacfx-f3-r-edge/arn:aws:iam::111122223333:policy/iacfx-f3-r-read"),
+        ("aws_iam_role_policy_attachment", "iacfx-f3-r-edge/arn:aws:iam::aws:policy/ReadOnlyAccess"),
+        ("aws_s3_bucket", "iacfx-f3-r-111122223333"),
+        ("aws_s3_bucket_server_side_encryption_configuration", "iacfx-f3-r-111122223333"),
+        ("aws_s3_bucket_public_access_block", "iacfx-f3-r-111122223333"),
+        ("aws_s3_bucket_ownership_controls", "iacfx-f3-r-111122223333"),
+        ("aws_s3_bucket", "iacfx-dated-111122223333"),
+        ("aws_s3_bucket_versioning", "iacfx-dated-111122223333"),  # Suspended is a real setting
+        ("aws_s3_bucket_server_side_encryption_configuration", "iacfx-dated-111122223333"),
+        ("aws_s3_bucket_lifecycle_configuration", "iacfx-dated-111122223333"),
+    }
+    assert not any(k[0] == "aws_vpc_security_group_egress_rule" and k[1].startswith("sgr-0b") for k in got)  # db: none
+    assert got[("aws_iam_policy", "arn:aws:iam::aws:policy/ReadOnlyAccess")].ownership is Ownership.CLOUD_MANAGED
+    assert got[("aws_vpc_security_group_egress_rule", "sgr-0d2")].ownership is Ownership.DEFAULT  # default SG rule
+    # The prompt-injection tag is data: it never shows up in any classification reason.
+    assert not any("Ignore all previous" in c.reason for c in got.values())
+
+
+def test_f3_addresses_are_valid_terraform_names(f3):
+    from iac_agent.core.naming import addresses
+
+    names = addresses([c.resource for c in classify(f3) if c.adoptable])
+    assert len(set(names.values())) == len(names)
+    for address in names.values():
+        assert re.fullmatch(r"aws_[a-z0-9_]+\.[a-z_][a-z0-9_]*", address), address
