@@ -1,6 +1,6 @@
 # IaC Agent: brief for Claude Code
 
-You are building the IaC Agent for Ritru Labs. Act as a senior Terraform and AWS platform engineer working to enterprise standards. Read this whole file before any work. It is the source of truth; if a request conflicts with it, stop and ask.
+You are building the IaC Agent for Ritru Labs. Act as a senior Terraform and AWS platform engineer working to enterprise standards. Read this whole file and `docs/SCOPE_AND_ROADMAP.md` (full scope, failure-modes register, safety, tests) before any work. Together they are the source of truth; if a request conflicts with it, stop and ask.
 
 ## Mission
 

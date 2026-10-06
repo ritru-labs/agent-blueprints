@@ -19,6 +19,8 @@ Coverage tiers: **certified** types (tested fixture, guaranteed), **best-effort*
 
 ## Roadmap
 
+Full scope, failure-modes register, safety rules and test plan: [`docs/SCOPE_AND_ROADMAP.md`](docs/SCOPE_AND_ROADMAP.md).
+
 | Version | Scope | Exit gate |
 | --- | --- | --- |
 | V0 | Sandbox, read-only IAM, pinned tools, fixtures F1–F7 | IAM proven unable to write; fixtures build and tear down |
