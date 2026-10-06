@@ -62,7 +62,9 @@ def test_bedrock_call_has_no_tools_and_marks_the_block_as_data():
             sent.update(kwargs)
             return {"output": {"message": {"content": [{"text": "ok"}]}}}
 
-    assert BedrockRepairer(Client(), "model-x")("BLOCK", ["import would update"]) == "ok"
+    repairer = BedrockRepairer(Client(), "model-x")
+    assert repairer("BLOCK", ["import would update"]) == "ok"
+    assert repairer.last_tokens == 0  # no usage reported
     assert "toolConfig" not in sent and sent["modelId"] == "model-x"
     assert sent["inferenceConfig"]["temperature"] == 0
     assert sent["system"][0]["text"] == SYSTEM_PROMPT and "ignore_changes" in SYSTEM_PROMPT

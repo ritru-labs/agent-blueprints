@@ -138,12 +138,12 @@ SUBNET = Resource(terraform_type="aws_subnet", import_id="subnet-0b2", name="app
 DEFAULT_SG = Resource(terraform_type="aws_security_group", import_id="sg-0d0", tags={"default": "1"})
 
 
-def make(tmp_path, cloud=None, cli=None, repairer=None, scanners=None, checkpointer=None):
+def make(tmp_path, cloud=None, cli=None, repairer=None, scanners=None, checkpointer=None, budget=200_000):
     cloud = cloud or FakeCloud([VPC, SUBNET, DEFAULT_SG])
     cli = cli or FakeTerraformCLI()
     repairer = repairer or (lambda block, problems: pytest.fail("LLM must not be called"))
     deps = Deps(adapter=cloud, terraform=Terraform(tmp_path, runner=cli), scanners=scanners or FakeScanners(),
-                repairer=repairer, workdir=tmp_path)  # fmt: skip
+                repairer=repairer, workdir=tmp_path, llm_token_budget=budget)  # fmt: skip
     graph = build(deps, checkpointer or InMemorySaver())
     return graph, cloud, cli
 
@@ -367,3 +367,65 @@ def test_cli_runs_scan_plan_approve_and_refuses_out_of_order(tmp_path, monkeypat
     assert cli.main(["approve", *base]) == 0
     assert "adopted" in capsys.readouterr().out
     assert sum(len(applied(c)) for c in clis) == 1
+
+
+class CountingRepairer:
+    """Never fixes anything; each call 'uses' 600 tokens. Optionally fails like Bedrock."""
+
+    def __init__(self, error=None):
+        self.calls, self.last_tokens, self.error = 0, 0, error
+
+    def __call__(self, block, problems):
+        if self.error:
+            raise self.error
+        self.calls += 1
+        self.last_tokens = 600
+        return block
+
+
+def drifting_subnet_cli():
+    return FakeTerraformCLI(body={"aws_subnet.subnet_app": "  drift = true\n"},
+                            actions=lambda a, b: ["update"] if "drift" in b else ["no-op"])  # fmt: skip
+
+
+def test_token_budget_pauses_the_run_and_a_bigger_budget_resumes_it(tmp_path):
+    repairer = CountingRepairer()
+    graph, _, cli = make(tmp_path, cli=drifting_subnet_cli(), repairer=repairer, budget=1000)
+    graph.invoke(start_state("r1", ACCOUNT, REGION), CONFIG)
+    graph.invoke(Command(resume="all"), CONFIG)
+    (ask,) = pending(graph)
+    assert ask["step"] == "llm_paused" and ask["tokens_used"] == 1200 and "budget of 1000" in ask["reason"]
+    assert repairer.calls == 2 and not applied(cli)
+
+    graph.invoke(Command(resume={"budget": 5000}), CONFIG)
+    (ask,) = pending(graph)
+    assert ask["step"] == "approve_plan" and repairer.calls == 3  # third try, then skipped
+    state = graph.invoke(Command(resume=True), CONFIG)
+    assert state["status"] == "adopted" and state["llm_tokens"] == 1800
+    assert "aws_subnet.subnet_app" in state["skipped"]
+
+
+def test_llm_outage_pauses_then_resumes(tmp_path):
+    from botocore.exceptions import ClientError
+
+    down = ClientError({"Error": {"Code": "ThrottlingException", "Message": "slow down"}}, "Converse")
+    repairer = CountingRepairer(error=down)
+    graph, _, cli = make(tmp_path, cli=drifting_subnet_cli(), repairer=repairer)
+    graph.invoke(start_state("r1", ACCOUNT, REGION), CONFIG)
+    graph.invoke(Command(resume="all"), CONFIG)
+    (ask,) = pending(graph)
+    assert ask["step"] == "llm_paused" and "ThrottlingException" in ask["reason"]
+    assert graph.get_state(CONFIG).values["attempts"] == {}  # an outage costs no attempt
+
+    repairer.error = None
+    graph.invoke(Command(resume={"budget": 200_000}), CONFIG)
+    assert pending(graph)[0]["step"] == "approve_plan"
+
+
+def test_stop_after_an_llm_pause_imports_nothing(tmp_path):
+    graph, _, cli = make(tmp_path, cli=drifting_subnet_cli(), repairer=CountingRepairer(), budget=0)
+    graph.invoke(start_state("r1", ACCOUNT, REGION), CONFIG)
+    graph.invoke(Command(resume="all"), CONFIG)
+    state = graph.invoke(Command(resume="stop"), CONFIG)
+    assert state["status"] == "failed" and not applied(cli)
+    assert "budget of 0 used" in (tmp_path / "ADOPTION_REPORT.md").read_text()
