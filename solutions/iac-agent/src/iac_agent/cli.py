@@ -28,7 +28,7 @@ from .adapters.aws.adapter import AwsAdapter
 from .core.graph import Deps, build, start_state
 from .core.repair import DEFAULT_TOKEN_BUDGET, TIMEOUTS, BedrockRepairer
 from .core.scanners import Scanners
-from .core.terraform import LOCK_FILE, Terraform
+from .core.terraform import LOCK_FILE, Terraform, tool_versions
 
 
 def _no_llm(block, problems):  # repair attempts fail and the resource is skipped
@@ -50,7 +50,7 @@ def _graph(args, conn):
     deps = Deps(
         adapter=AwsAdapter(session, args.region, state_files=args.state_file or ()),
         terraform=Terraform(args.workdir),
-        scanners=Scanners(),
+        scanners=Scanners(AwsAdapter.tflint_config(tool_versions())),
         repairer=repairer,
         workdir=args.workdir,
         backend_hcl=Path(args.backend).read_text() if args.backend else None,

@@ -3,20 +3,22 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import subprocess
 import tempfile
 from pathlib import Path
 
-from .terraform import tool_versions
+from .terraform import LOCK_FILE, tool_versions
 
 
 class ScannerError(RuntimeError):
     pass
 
 
-def _run(cmd: list[str], cwd: Path, ok_codes: tuple[int, ...] = (0,)) -> subprocess.CompletedProcess:
-    proc = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, check=False)
+def _run(cmd: list[str], cwd: Path, ok_codes: tuple[int, ...] = (0,), env: dict | None = None):
+    proc = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, check=False,
+                          env={**os.environ, **(env or {})})  # fmt: skip
     if proc.returncode not in ok_codes:
         raise ScannerError(f"{' '.join(cmd)} exited {proc.returncode}: {proc.stderr[-2000:]}")
     return proc
@@ -37,11 +39,32 @@ def _tf_only(workdir: Path, tmp: str) -> Path:
     return out
 
 
+PLUGIN_DIR = LOCK_FILE.parent / ".tools" / "tflint-plugins"  # filled by scripts/install-tools.sh
+
+
 class Scanners:
+    def __init__(self, tflint_config: str | None = None):
+        """tflint_config: .tflint.hcl content from the cloud adapter (its pinned ruleset)."""
+        self.tflint_config = tflint_config
+
     def tflint(self, workdir: Path) -> list[dict]:
-        _check_version("tflint", _run(["tflint", "--version"], workdir).stdout)
-        out = _run(["tflint", "--format=json", "--no-color"], workdir, ok_codes=(0, 2, 3)).stdout
-        return json.loads(out or "{}").get("issues", [])
+        env = {"TFLINT_PLUGIN_DIR": str(PLUGIN_DIR)}
+        with tempfile.TemporaryDirectory() as tmp:
+            args = ["tflint"]
+            if self.tflint_config:
+                config = Path(tmp) / ".tflint.hcl"
+                config.write_text(self.tflint_config)
+                args.append(f"--config={config}")
+            shown = _run([*args, "--version"], workdir, env=env).stdout
+            _check_version("tflint", shown)
+            for pinned in re.findall(r'version\s*=\s*"([^"]+)"', self.tflint_config or ""):
+                if f"({pinned})" not in shown:  # e.g. "+ ruleset.aws (0.49.0)"
+                    raise ScannerError(f"tflint ruleset {pinned} is not installed: {shown.strip()[:300]}")
+            out = _run([*args, "--format=json", "--no-color"], workdir, ok_codes=(0, 2, 3), env=env).stdout
+        report = json.loads(out or "{}")
+        if report.get("errors"):  # e.g. plugin missing: never silently lint with fewer rules
+            raise ScannerError(f"tflint: {report['errors']}")
+        return report.get("issues") or []
 
     def gitleaks(self, workdir: Path) -> list[dict]:
         _check_version("gitleaks", _run(["gitleaks", "version"], workdir).stdout)

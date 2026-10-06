@@ -14,7 +14,7 @@ from iac_agent.adapters.aws.adapter import AwsAdapter
 from iac_agent.core import hcl
 from iac_agent.core.gates import static_gate
 from iac_agent.core.models import ScopeItem
-from iac_agent.core.scanners import Scanners
+from iac_agent.core.scanners import ScannerError, Scanners
 from iac_agent.core.terraform import LOCK_FILE, Terraform, tool_versions
 
 TOOLS = LOCK_FILE.parent / ".tools" / "bin"
@@ -52,8 +52,8 @@ def test_versions_providers_and_imports_are_valid_and_pinned(workdir):
 
 def test_scanners_parse_real_output_and_locate_blocks(workdir):
     wd, tf = workdir
-    scanners = Scanners()
-    assert scanners.tflint(wd) == []
+    scanners = Scanners(AwsAdapter.tflint_config(tool_versions()))
+    assert [i for i in scanners.tflint(wd) if i["rule"]["severity"] == "error"] == []
     assert scanners.gitleaks(wd) == []
     failed = scanners.checkov(wd)
     assert failed and all({"check_id", "resource"} <= f.keys() for f in failed)
@@ -70,3 +70,24 @@ def test_scanners_parse_real_output_and_locate_blocks(workdir):
         assert finding.detail["kind"] == "secret" and FAKE_TOKEN not in finding.message
     finally:
         (wd / "generated.tf").write_text(text)
+
+
+def test_tflint_aws_ruleset_catches_invalid_values_and_the_gate_locates_them(workdir):
+    wd, _ = workdir
+    scanners = Scanners(AwsAdapter.tflint_config(tool_versions()))
+    bad = 'resource "aws_instance" "instance_app" {\n  ami           = "ami-0abc"\n  instance_type = "t3.notreal"\n}\n'
+    (wd / "ec2.tf").write_text(bad)
+    try:
+        issues = scanners.tflint(wd)
+        assert any(i["rule"]["name"] == "aws_instance_invalid_type" for i in issues), issues
+        result = static_gate({"ec2.tf": bad}, [], {"valid": True}, issues, [])
+        assert {f.address for f in result.findings} == {"aws_instance.instance_app"}
+    finally:
+        (wd / "ec2.tf").unlink()
+
+
+def test_tflint_refuses_a_ruleset_that_is_not_the_pinned_one(workdir):
+    wd, _ = workdir
+    config = AwsAdapter.tflint_config({**tool_versions(), "tflint_ruleset_aws": "0.1.0"})
+    with pytest.raises(ScannerError, match="0.1.0"):
+        Scanners(config).tflint(wd)

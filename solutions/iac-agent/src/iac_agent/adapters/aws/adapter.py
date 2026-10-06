@@ -61,6 +61,16 @@ class AwsAdapter:
             return "iam.tf"
         return self.FILES.get(terraform_type, "other.tf")
 
+    @staticmethod
+    def tflint_config(versions: Mapping[str, str]) -> str:
+        """Official AWS ruleset at the pinned version. deep_check stays off: tflint never calls AWS."""
+        return (
+            'plugin "terraform" {\n  enabled = true\n  preset  = "recommended"\n}\n\n'
+            'plugin "aws" {\n  enabled    = true\n'
+            f'  version    = "{versions["tflint_ruleset_aws"]}"\n'
+            '  source     = "github.com/terraform-linters/tflint-ruleset-aws"\n  deep_check = false\n}\n'
+        )
+
     def provider_files(self, versions: Mapping[str, str], account: str) -> dict[str, str]:
         return {
             "versions.tf": (

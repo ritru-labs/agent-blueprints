@@ -184,7 +184,7 @@ def main(argv: list[str] | None = None) -> int:  # pragma: no cover - needs the 
     from .cli import use_pinned_tools
     from .core.repair import TIMEOUTS, BedrockRepairer
     from .core.scanners import Scanners
-    from .core.terraform import Terraform
+    from .core.terraform import Terraform, tool_versions
 
     p = argparse.ArgumentParser(prog="python -m iac_agent.harness")
     p.add_argument("manifest", type=Path)
@@ -226,7 +226,8 @@ def main(argv: list[str] | None = None) -> int:  # pragma: no cover - needs the 
         repairer = (BedrockRepairer(base.client("bedrock-runtime", config=TIMEOUTS), args.model_id)
                     if args.model_id else (lambda block, problems: ""))  # fmt: skip
         return Deps(adapter=AwsAdapter(scanner, manifest.region), terraform=Terraform(workdir, env=tf_env),
-                    scanners=Scanners(), repairer=repairer, workdir=workdir, backend_hcl=backend)  # fmt: skip
+                    scanners=Scanners(AwsAdapter.tflint_config(tool_versions())), repairer=repairer,
+                    workdir=workdir, backend_hcl=backend)  # fmt: skip
 
     def drift() -> None:
         subprocess.run([str(FIXTURES / "F6-drift-mid-run" / "drift.sh"), manifest.run], check=True)

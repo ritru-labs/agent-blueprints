@@ -54,7 +54,7 @@ cd solutions/iac-agent
 pip install -e ".[dev]"
 pytest -q                       # offline: policies, gates on recorded plans, fixture dry runs (needs jq)
 
-scripts/install-tools.sh        # exact pinned terraform/tflint/gitleaks/checkov into .tools/ (checksummed)
+scripts/install-tools.sh        # exact pinned terraform, tflint + AWS ruleset, gitleaks, checkov into .tools/ (verified)
 IAC_AGENT_REAL_TOOLS=1 pytest -q tests/test_real_tools.py   # real binaries on sample output, no AWS
 
 # In the sandbox account only:

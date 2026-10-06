@@ -46,6 +46,17 @@ fetch "https://github.com/gitleaks/gitleaks/releases/download/v$gl/$f" \
   "https://github.com/gitleaks/gitleaks/releases/download/v$gl/gitleaks_${gl}_checksums.txt" "$f"
 tar -xzf "$tmp/$f" -C "$bin" gitleaks
 
+# tflint's AWS ruleset: tflint --init downloads it and verifies the signed checksums itself.
+mkdir -p "$here/.tools/tflint-plugins"
+cat >"$tmp/.tflint.hcl" <<HCL
+plugin "aws" {
+  enabled = true
+  version = "$(v tflint_ruleset_aws)"
+  source  = "github.com/terraform-linters/tflint-ruleset-aws"
+}
+HCL
+TFLINT_PLUGIN_DIR="$here/.tools/tflint-plugins" "$bin/tflint" --init --config="$tmp/.tflint.hcl" >/dev/null
+
 # checkov is a Python tool: its own venv, exact version, so it cannot clash with the agent's deps.
 ck="$(v checkov)"
 py="$(command -v python3.12 || command -v python3.11 || command -v python3)"
@@ -56,6 +67,6 @@ ln -sf "../checkov-venv/bin/checkov" "$bin/checkov"
 chmod +x "$bin"/*
 echo "Installed into $bin:"
 "$bin/terraform" version | head -1
-"$bin/tflint" --version | head -1
+TFLINT_PLUGIN_DIR="$here/.tools/tflint-plugins" "$bin/tflint" --version --config="$tmp/.tflint.hcl"
 echo "gitleaks $("$bin/gitleaks" version)"
 echo "checkov $("$bin/checkov" --version)"
