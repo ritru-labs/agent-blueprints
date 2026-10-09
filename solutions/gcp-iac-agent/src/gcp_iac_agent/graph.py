@@ -39,6 +39,7 @@ def build_graph(
     asset_types: list[str] | None = None,
     provider_version: str = ">= 6.0",
     max_attempts: int = 3,
+    state_bucket: str | None = None,
 ):
     def discover_node(state: State):
         found: Discovery = discover(state["project"], asset_types)
@@ -47,7 +48,7 @@ def build_graph(
         return {"resources": [r.to_dict() for r in found.resources], "skipped": found.skipped}
 
     def scaffold_node(state: State):
-        workspace.scaffold(state["project"], state["resources"], provider_version)
+        workspace.scaffold(state["project"], state["resources"], provider_version, state_bucket)
         workspace.generate_config()
         return {"attempts": 0}
 

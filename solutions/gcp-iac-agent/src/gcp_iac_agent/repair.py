@@ -23,8 +23,10 @@ read-only attributes, or values the provider rejects; remove or correct those ar
 `config` is what the configuration would set. Make `config` match `cloud`.
 
 Rules:
-- Only edit generated.tf. Each edit replaces `old` (copied exactly, appearing once in the file, \
-with enough surrounding lines to be unique) with `new`.
+- Only edit generated.tf. Each edit names one `resource` (its address, e.g. \
+google_compute_firewall.allow_ssh) and replaces `old` with `new` inside that resource's block. \
+`old` must be copied exactly and appear once in that block. When the same fix applies to several \
+resources, return one edit per resource.
 - Never add lifecycle, ignore_changes, provisioner, data, module, provider or new resource blocks, \
 and never delete a resource block. Hiding a difference is not a fix.
 - If a difference cannot be fixed by configuration, return no edits for it and say why in `notes`.
@@ -32,7 +34,10 @@ and never delete a resource block. Hiding a difference is not a fix.
 
 
 class Edit(BaseModel):
-    old: str = Field(description="Exact existing text in generated.tf; must occur exactly once")
+    resource: str = Field(
+        description="Address of the resource block to edit, e.g. google_compute_network.vpc"
+    )
+    old: str = Field(description="Exact existing text inside that resource block; must occur once in it")
     new: str = Field(description="Replacement text")
 
 

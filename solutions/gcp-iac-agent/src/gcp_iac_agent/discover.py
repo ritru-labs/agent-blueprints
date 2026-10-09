@@ -5,6 +5,9 @@ import re
 import subprocess
 from dataclasses import asdict, dataclass
 
+# Cloud NAT lives inside a router and is not a Cloud Asset type; it is read from the router list.
+ROUTER_NAT = "compute.googleapis.com/RouterNat"
+
 # Cloud Asset type -> Terraform resource type. Add a row to support a new type;
 # the repair loop absorbs most provider quirks, so a row is usually all it takes.
 SUPPORTED = {
@@ -12,6 +15,11 @@ SUPPORTED = {
     "compute.googleapis.com/Subnetwork": "google_compute_subnetwork",
     "compute.googleapis.com/Firewall": "google_compute_firewall",
     "compute.googleapis.com/Address": "google_compute_address",
+    "compute.googleapis.com/Instance": "google_compute_instance",
+    "compute.googleapis.com/Disk": "google_compute_disk",
+    "compute.googleapis.com/ResourcePolicy": "google_compute_resource_policy",
+    "compute.googleapis.com/Router": "google_compute_router",
+    ROUTER_NAT: "google_compute_router_nat",
     "storage.googleapis.com/Bucket": "google_storage_bucket",
 }
 
@@ -44,6 +52,8 @@ def import_id(asset_type: str, asset_name: str) -> str:
     # Asset names look like //compute.googleapis.com/projects/p/global/networks/n.
     if asset_type == "storage.googleapis.com/Bucket":
         return asset_name.rsplit("/", 1)[-1]
+    if asset_type == ROUTER_NAT:  # Terraform wants .../routers/ROUTER/NAT, without "nats/"
+        return asset_name.split(".googleapis.com/", 1)[1].replace("/nats/", "/")
     return asset_name.split(".googleapis.com/", 1)[1]
 
 
@@ -69,6 +79,18 @@ def auto_subnets(networks: list[dict]) -> dict[str, str]:
             for link in network.get("subnetworks", []):
                 owned[link.split("/compute/v1/", 1)[-1]] = network["name"]
     return owned
+
+
+def router_nats(routers: list[dict]) -> list[dict]:
+    """Cloud NAT configs as asset-shaped records, so they flow through the same mapping as real assets."""
+    return [
+        {
+            "assetType": ROUTER_NAT,
+            "name": f"//compute.googleapis.com/{router['selfLink'].split('/compute/v1/', 1)[1]}/nats/{nat['name']}",
+        }
+        for router in routers
+        for nat in router.get("nats", [])
+    ]
 
 
 def parse_assets(assets: list[dict], auto_owned: dict[str, str] | None = None) -> Discovery:
@@ -103,12 +125,17 @@ def gcloud_json(*args: str) -> list[dict]:
 
 def discover(project: str, asset_types: list[str] | None = None) -> Discovery:
     asset_types = asset_types or sorted(SUPPORTED)
-    assets = gcloud_json(
-        "asset",
-        "search-all-resources",
-        f"--scope=projects/{project}",
-        f"--asset-types={','.join(asset_types)}",
-    )
+    searchable = [t for t in asset_types if t != ROUTER_NAT]
+    assets = []
+    if searchable:
+        assets = gcloud_json(
+            "asset",
+            "search-all-resources",
+            f"--scope=projects/{project}",
+            f"--asset-types={','.join(searchable)}",
+        )
+    if ROUTER_NAT in asset_types:
+        assets += router_nats(gcloud_json("compute", "routers", "list", f"--project={project}"))
     owned = {}
     if "compute.googleapis.com/Subnetwork" in asset_types:
         owned = auto_subnets(gcloud_json("compute", "networks", "list", f"--project={project}"))

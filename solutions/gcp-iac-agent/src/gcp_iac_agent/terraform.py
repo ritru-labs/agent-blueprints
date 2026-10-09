@@ -26,6 +26,14 @@ provider "google" {{
 }}
 """
 
+BACKEND_TF = """terraform {{
+  backend "gcs" {{
+    bucket = "{bucket}"
+    prefix = "{prefix}"
+  }}
+}}
+"""
+
 # Block forms that would hide a diff or run code during plan/apply.
 FORBIDDEN = [
     (re.compile(r"^\s*lifecycle\s*\{", re.MULTILINE), "lifecycle blocks (ignore_changes hides real drift)"),
@@ -146,6 +154,17 @@ def check_generated(text: str, allowed_types: set[str]) -> None:
             raise UnsafeEdit(f"{GENERATED} may only contain resource blocks of imported types: {line!r}")
 
 
+def resource_block(text: str, address: str) -> tuple[int, int]:
+    """Span of `resource "TYPE" "NAME" { ... }`. Terraform writes the closing brace at column 0."""
+    tf_type, _, name = address.partition(".")
+    header = re.compile(rf'^resource\s+"{re.escape(tf_type)}"\s+"{re.escape(name)}"\s*\{{\s*$', re.MULTILINE)
+    match = header.search(text)
+    end = text.find("\n}", match.end()) if match else -1
+    if not match or end == -1:
+        raise UnsafeEdit(f"resource {address} not found in {GENERATED}")
+    return match.start(), end + 2
+
+
 def file_sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
@@ -175,18 +194,30 @@ class Workspace:
 
     # --- setup -------------------------------------------------------------
 
-    def scaffold(self, project: str, resources: list[dict], provider_version: str) -> None:
+    def scaffold(
+        self, project: str, resources: list[dict], provider_version: str, state_bucket: str | None = None
+    ) -> None:
         self.dir.mkdir(parents=True, exist_ok=True)
         (self.dir / "providers.tf").write_text(PROVIDERS_TF.format(version=provider_version, project=project))
+        if state_bucket:
+            # One state object per workspace, so separate runs never share (or overwrite) state.
+            prefix = f"gcp-iac-agent/{self.dir.resolve().name}"
+            (self.dir / "backend.tf").write_text(BACKEND_TF.format(bucket=state_bucket, prefix=prefix))
         blocks = [
             f"import {{\n  to = {r['tf_type']}.{r['tf_name']}\n  id = {json.dumps(r['import_id'])}\n}}\n"
             for r in resources
         ]
-        (self.dir / "imports.tf").write_text("\n".join(blocks))
-        (self.dir / GENERATED).unlink(missing_ok=True)
         init = self.terraform("init", "-input=false", "-no-color")
         if init.returncode != 0:
             raise TerraformError(f"terraform init failed:\n{init.stderr.strip()}")
+        managed = self.terraform("state", "list").stdout.split()
+        if managed:
+            # Regenerating config here would put already-managed resources up for deletion.
+            raise TerraformError(
+                f"this workspace's state already manages {len(managed)} resources; use a new --workspace"
+            )
+        (self.dir / "imports.tf").write_text("\n".join(blocks))
+        (self.dir / GENERATED).unlink(missing_ok=True)
 
     def generate_config(self) -> list[str]:
         """Let Terraform write the HCL for every import block; errors in it are fine, repair fixes them."""
@@ -215,15 +246,18 @@ class Workspace:
         return (self.dir / GENERATED).read_text()
 
     def apply_edits(self, edits: list[dict], allowed_types: set[str]) -> None:
-        """Exact-string replacements on generated.tf; all-or-nothing."""
+        """Exact-string replacements, each inside one named resource block; all-or-nothing."""
         text = self.generated()
         for edit in edits:
-            count = text.count(edit["old"])
+            start, end = resource_block(text, edit["resource"])
+            block = text[start:end]
+            count = block.count(edit["old"])
             if count != 1:
                 raise UnsafeEdit(
-                    f"edit target must appear exactly once, found {count}: {edit['old'][:120]!r}"
+                    f"edit target must appear exactly once in {edit['resource']}, found {count}: "
+                    f"{edit['old'][:120]!r}"
                 )
-            text = text.replace(edit["old"], edit["new"])
+            text = text[:start] + block.replace(edit["old"], edit["new"]) + text[end:]
         check_generated(text, allowed_types)
         (self.dir / GENERATED).write_text(text)
 

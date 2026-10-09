@@ -35,7 +35,10 @@ def client_returning(text: str, stop_reason: str = "end_turn"):
 
 
 def test_sends_plan_and_config_and_parses_structured_edits():
-    answer = {"edits": [{"old": "mtu = 1500", "new": "mtu = 1460"}], "notes": "matched mtu"}
+    answer = {
+        "edits": [{"resource": "a.b", "old": "mtu = 1500", "new": "mtu = 1460"}],
+        "notes": "matched mtu",
+    }
     client, sent = client_returning(json.dumps(answer))
     fix = Repairer(client, first_party=True)("mtu = 1500", PLAN, ["attempt 1: edits rejected"])
 

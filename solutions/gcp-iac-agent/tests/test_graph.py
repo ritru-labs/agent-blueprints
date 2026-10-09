@@ -22,7 +22,7 @@ class FakeWorkspace:
         self.config = "mtu = 1500"
         self.reject_edits, self.imported, self.plans = reject_edits, None, 0
 
-    def scaffold(self, project, resources, provider_version):
+    def scaffold(self, project, resources, provider_version, state_bucket=None):
         self.scaffolded = [r["import_id"] for r in resources]
 
     def generate_config(self):
@@ -65,7 +65,11 @@ class FakeRepairer:
 
     def __call__(self, config, plan_summary, feedback):
         self.calls.append((plan_summary["changes"], list(feedback)))
-        edits = [Edit(old="mtu = 1500", new="mtu = 1460")] if self.edits else []
+        edits = (
+            [Edit(resource="google_compute_network.prod_vpc", old="mtu = 1500", new="mtu = 1460")]
+            if self.edits
+            else []
+        )
         return RepairPlan(edits=edits, notes="matched mtu to the live value")
 
 

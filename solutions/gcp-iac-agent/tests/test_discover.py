@@ -1,4 +1,4 @@
-from gcp_iac_agent.discover import auto_subnets, parse_assets
+from gcp_iac_agent.discover import auto_subnets, parse_assets, router_nats
 
 ASSETS = [
     {
@@ -64,3 +64,17 @@ def test_subnets_of_auto_mode_networks_are_skipped_not_imported():
     subnets = {r.import_id for r in found.resources if r.tf_type == "google_compute_subnetwork"}
     assert subnets == {"projects/p/regions/us-central1/subnetworks/app"}
     assert any("auto-created by auto-mode network default" in s for s in found.skipped)
+
+
+def test_cloud_nat_is_read_from_routers_with_terraform_import_id():
+    routers = [
+        {
+            "selfLink": "https://www.googleapis.com/compute/v1/projects/p/regions/asia-south1/routers/r1",
+            "nats": [{"name": "nat-1"}],
+        },
+        {"selfLink": "https://www.googleapis.com/compute/v1/projects/p/regions/asia-south1/routers/r2"},
+    ]
+    found = parse_assets(router_nats(routers))
+    assert [(r.address, r.import_id) for r in found.resources] == [
+        ("google_compute_router_nat.nat_1", "projects/p/regions/asia-south1/routers/r1/nat-1")
+    ]

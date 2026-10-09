@@ -88,6 +88,10 @@ def main(argv: list[str] | None = None) -> int:
         help="Terraform reads GCP as the active gcloud login (default, same identity as discovery) "
         "or via application default credentials / GOOGLE_CREDENTIALS (CI, service accounts)",
     )
+    parser.add_argument(
+        "--state-bucket",
+        help="GCS bucket for Terraform state (one object per workspace); default: local state file",
+    )
     args = parser.parse_args(argv)
 
     args.workspace.mkdir(parents=True, exist_ok=True)
@@ -103,6 +107,7 @@ def main(argv: list[str] | None = None) -> int:
             checkpointer=saver,
             asset_types=args.types,
             provider_version=args.provider_version,
+            state_bucket=args.state_bucket,
             max_attempts=args.max_attempts,
         )
         try:

@@ -105,21 +105,33 @@ def test_bucket_lifecycle_rule_is_still_allowed():
 def test_edits_are_exact_and_all_or_nothing(tmp_path):
     ws = Workspace(tmp_path)
     (tmp_path / GENERATED).write_text(NETWORK)
-    ws.apply_edits([{"old": "mtu  = 1460", "new": "mtu  = 1500"}], TYPES)
+    ws.apply_edits(
+        [{"resource": "google_compute_network.prod_vpc", "old": "mtu  = 1460", "new": "mtu  = 1500"}], TYPES
+    )
     assert "1500" in ws.generated()
 
     with pytest.raises(UnsafeEdit):  # second edit is unsafe, so the first must not land either
         ws.apply_edits(
             [
-                {"old": 'name = "prod-vpc"', "new": 'name = "other"'},
-                {"old": "mtu  = 1500", "new": "mtu  = 1500\n  lifecycle {\n  }"},
+                {
+                    "resource": "google_compute_network.prod_vpc",
+                    "old": 'name = "prod-vpc"',
+                    "new": 'name = "other"',
+                },
+                {
+                    "resource": "google_compute_network.prod_vpc",
+                    "old": "mtu  = 1500",
+                    "new": "mtu  = 1500\n  lifecycle {\n  }",
+                },
             ],
             TYPES,
         )
     assert 'name = "prod-vpc"' in ws.generated()
 
     with pytest.raises(UnsafeEdit):
-        ws.apply_edits([{"old": "does not exist", "new": ""}], TYPES)
+        ws.apply_edits(
+            [{"resource": "google_compute_network.prod_vpc", "old": "does not exist", "new": ""}], TYPES
+        )
 
 
 # --- subprocess plumbing, against a stand-in terraform binary ------------------------------
@@ -127,7 +139,12 @@ def test_edits_are_exact_and_all_or_nothing(tmp_path):
 FAKE_TERRAFORM = """#!{python}
 import json, os, sys
 args = sys.argv[1:]
-plan = json.loads(open(os.environ["FAKE_PLAN"]).read())
+plan = json.loads(open(os.environ["FAKE_PLAN"]).read()) if os.path.exists(os.environ["FAKE_PLAN"]) else {{}}
+if args[0] == "init":
+    sys.exit(0)
+if args[:2] == ["state", "list"]:
+    print(os.environ.get("FAKE_STATE", ""))
+    sys.exit(0)
 if args[0] == "plan" and "-detailed-exitcode" in args:
     sys.exit(int(os.environ.get("FAKE_VERIFY_EXIT", "0")))
 if args[0] == "plan":
@@ -179,3 +196,44 @@ def test_import_refuses_a_plan_that_changes_resources(fake_terraform):
     with pytest.raises(TerraformError, match="not import-only"):
         ws.import_reviewed_plan(plan.sha256, expected_imports=1)
     assert not Path(ws.dir / "applied").exists()
+
+
+FIREWALLS = "".join(
+    f'resource "google_compute_firewall" "{n}" {{\n  source_tags = []\n  priority    = 1000\n}}\n\n'
+    for n in ("a", "b", "c")
+)
+
+
+def test_same_text_in_several_resources_is_edited_per_resource(tmp_path):
+    # The real failure on rithru-radf-ci: one fix, identical text in three firewall rules.
+    ws = Workspace(tmp_path)
+    (tmp_path / GENERATED).write_text(FIREWALLS)
+    ws.apply_edits(
+        [{"resource": "google_compute_firewall.b", "old": "  source_tags = []\n", "new": ""}],
+        {"google_compute_firewall"},
+    )
+    text = ws.generated()
+    assert text.count("source_tags = []") == 2
+    assert 'resource "google_compute_firewall" "b" {\n  priority    = 1000\n}' in text
+
+    with pytest.raises(UnsafeEdit, match="not found"):
+        ws.apply_edits(
+            [{"resource": "google_compute_firewall.zzz", "old": "priority", "new": "x"}],
+            {"google_compute_firewall"},
+        )
+
+
+def test_scaffold_refuses_a_workspace_that_already_manages_resources(fake_terraform, monkeypatch):
+    ws, _ = fake_terraform
+    monkeypatch.setenv("FAKE_STATE", "google_compute_network.default")
+    (ws.dir / GENERATED).write_text(NETWORK)
+    with pytest.raises(TerraformError, match="already manages 1 resources"):
+        ws.scaffold("p", [], ">= 6.0")
+    assert (ws.dir / GENERATED).read_text() == NETWORK  # existing config untouched
+
+
+def test_scaffold_writes_one_state_prefix_per_workspace(fake_terraform):
+    ws, _ = fake_terraform
+    ws.scaffold("p", [{"tf_type": "t", "tf_name": "n", "import_id": "i"}], ">= 6.0", state_bucket="b")
+    backend = (ws.dir / "backend.tf").read_text()
+    assert 'bucket = "b"' in backend and 'prefix = "gcp-iac-agent/work"' in backend
