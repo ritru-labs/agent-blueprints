@@ -1,4 +1,4 @@
-from gcp_iac_agent.discover import auto_subnets, parse_assets, router_nats
+from gcp_iac_agent.discover import auto_subnets, parse_assets, project_iam_grants, router_nats
 
 ASSETS = [
     {
@@ -107,3 +107,33 @@ def test_service_accounts_and_secrets_never_include_secret_values_or_google_defa
     ]
     assert any("Google-created default service account" in s for s in found.skipped)
     assert any("secret values are never imported" in s for s in found.skipped)
+
+
+def test_only_grants_to_project_service_accounts_are_imported():
+    policy = {
+        "bindings": [
+            {
+                "role": "roles/logging.logWriter",
+                "members": ["serviceAccount:ci-vm@p.iam.gserviceaccount.com"],
+            },
+            {"role": "roles/owner", "members": ["user:someone@example.com"]},
+            {"role": "roles/editor", "members": ["serviceAccount:123-compute@developer.gserviceaccount.com"]},
+            {
+                "role": "roles/viewer",
+                "members": ["serviceAccount:ci-vm@p.iam.gserviceaccount.com"],
+                "condition": {"title": "temporary"},
+            },
+        ]
+    }
+    grants, skipped = project_iam_grants("p", policy)
+    found = parse_assets(grants)
+    assert [(r.address, r.import_id) for r in found.resources] == [
+        (
+            "google_project_iam_member.ci_vm_logging_logwriter",
+            "p roles/logging.logWriter serviceAccount:ci-vm@p.iam.gserviceaccount.com",
+        )
+    ]
+    assert len(skipped) == 3
+    assert any("human or group access" in s for s in skipped)
+    assert any("Google-managed service account" in s for s in skipped)
+    assert any("conditional grant" in s for s in skipped)

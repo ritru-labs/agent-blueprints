@@ -7,6 +7,9 @@ from dataclasses import asdict, dataclass
 
 # Cloud NAT lives inside a router and is not a Cloud Asset type; it is read from the router list.
 ROUTER_NAT = "compute.googleapis.com/RouterNat"
+# Project IAM grants are not Cloud Asset resources either; they are read from the project's IAM policy.
+PROJECT_IAM = "cloudresourcemanager.googleapis.com/ProjectIamMember"
+DERIVED = {ROUTER_NAT, PROJECT_IAM}
 
 # Cloud Asset type -> Terraform resource type. Add a row to support a new type;
 # the repair loop absorbs most provider quirks, so a row is usually all it takes.
@@ -20,6 +23,8 @@ SUPPORTED = {
     "compute.googleapis.com/ResourcePolicy": "google_compute_resource_policy",
     "compute.googleapis.com/Router": "google_compute_router",
     ROUTER_NAT: "google_compute_router_nat",
+    # One grant per resource (non-authoritative): never rewrites the project's whole IAM policy.
+    PROJECT_IAM: "google_project_iam_member",
     "storage.googleapis.com/Bucket": "google_storage_bucket",
     "iam.googleapis.com/ServiceAccount": "google_service_account",
     # The secret container only (name, replication, labels). Secret versions hold the actual values and
@@ -101,6 +106,39 @@ def router_nats(routers: list[dict]) -> list[dict]:
     ]
 
 
+def project_iam_grants(project: str, policy: dict) -> tuple[list[dict], list[str]]:
+    """Grants to service accounts created in this project, as asset-shaped records.
+
+    Human, group and Google-managed grants are skipped: a mistake there can lock people or Google out.
+    """
+    grants, skipped = [], []
+    own = f"@{project}.iam.gserviceaccount.com"
+    for binding in policy.get("bindings", []):
+        role = binding["role"]
+        for member in binding["members"]:
+            if "condition" in binding:
+                reason = "conditional grant, not managed yet"
+            elif not (member.startswith("serviceAccount:") and member.endswith(own)):
+                reason = (
+                    "human or group access, not managed by default"
+                    if member.split(":", 1)[0] in ("user", "group", "domain")
+                    else "Google-managed service account"
+                )
+            else:
+                local = member.split(":", 1)[1].split("@", 1)[0]
+                grants.append(
+                    {
+                        "assetType": PROJECT_IAM,
+                        "name": f"//cloudresourcemanager.googleapis.com/projects/{project}/iamMembers/"
+                        f"{local}_{role.rsplit('/', 1)[-1]}",
+                        "importId": f"{project} {role} {member}",
+                    }
+                )
+                continue
+            skipped.append(f"{role} for {member}: {reason}")
+    return grants, skipped
+
+
 def parse_assets(assets: list[dict], auto_owned: dict[str, str] | None = None) -> Discovery:
     resources, skipped, names = [], [], {}
     auto_owned = auto_owned or {}
@@ -123,7 +161,12 @@ def parse_assets(assets: list[dict], auto_owned: dict[str, str] | None = None) -
             continue
         tf_type = SUPPORTED[kind]
         resources.append(
-            Resource(kind, tf_type, tf_name(name, names.setdefault(tf_type, set())), import_id(kind, name))
+            Resource(
+                kind,
+                tf_type,
+                tf_name(name, names.setdefault(tf_type, set())),
+                asset.get("importId") or import_id(kind, name),
+            )
         )
     return Discovery(resources, skipped)
 
@@ -139,7 +182,7 @@ def gcloud_json(*args: str) -> list[dict]:
 
 def discover(project: str, asset_types: list[str] | None = None) -> Discovery:
     asset_types = asset_types or sorted(SUPPORTED)
-    searchable = [t for t in asset_types if t != ROUTER_NAT]
+    searchable = [t for t in asset_types if t not in DERIVED]
     assets = []
     if searchable:
         assets = gcloud_json(
@@ -159,4 +202,9 @@ def discover(project: str, asset_types: list[str] | None = None) -> Discovery:
     owned = {}
     if "compute.googleapis.com/Subnetwork" in asset_types:
         owned = auto_subnets(gcloud_json("compute", "networks", "list", f"--project={project}"))
-    return parse_assets(assets, owned)
+    iam_skipped = []
+    if PROJECT_IAM in asset_types:
+        grants, iam_skipped = project_iam_grants(project, gcloud_json("projects", "get-iam-policy", project))
+        assets += grants
+    found = parse_assets(assets, owned)
+    return Discovery(found.resources, found.skipped + iam_skipped)
