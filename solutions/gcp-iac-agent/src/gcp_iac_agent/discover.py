@@ -58,8 +58,22 @@ def tf_name(asset_name: str, taken: set[str]) -> str:
     return name
 
 
-def parse_assets(assets: list[dict]) -> Discovery:
+def auto_subnets(networks: list[dict]) -> dict[str, str]:
+    """Subnets GCP creates for auto-mode networks: import id -> owning network name.
+
+    They are managed through their network (auto_create_subnetworks = true), not as separate resources.
+    """
+    owned = {}
+    for network in networks:
+        if network.get("autoCreateSubnetworks"):
+            for link in network.get("subnetworks", []):
+                owned[link.split("/compute/v1/", 1)[-1]] = network["name"]
+    return owned
+
+
+def parse_assets(assets: list[dict], auto_owned: dict[str, str] | None = None) -> Discovery:
     resources, skipped, names = [], [], {}
+    auto_owned = auto_owned or {}
     for asset in sorted(assets, key=lambda a: a["name"]):
         kind, name = asset.get("assetType", ""), asset["name"]
         if kind not in SUPPORTED:
@@ -68,6 +82,9 @@ def parse_assets(assets: list[dict]) -> Discovery:
         if TERRAFORM_LABEL in (asset.get("labels") or {}):
             skipped.append(f"{name}: already managed by Terraform ({TERRAFORM_LABEL} label)")
             continue
+        if import_id(kind, name) in auto_owned:
+            skipped.append(f"{name}: auto-created by auto-mode network {auto_owned[import_id(kind, name)]}")
+            continue
         tf_type = SUPPORTED[kind]
         resources.append(
             Resource(kind, tf_type, tf_name(name, names.setdefault(tf_type, set())), import_id(kind, name))
@@ -75,20 +92,24 @@ def parse_assets(assets: list[dict]) -> Discovery:
     return Discovery(resources, skipped)
 
 
-def search_assets(project: str, asset_types: list[str]) -> list[dict]:
+def gcloud_json(*args: str) -> list[dict]:
     result = subprocess.run(
-        [
-            "gcloud", "asset", "search-all-resources",
-            f"--scope=projects/{project}",
-            f"--asset-types={','.join(asset_types)}",
-            "--format=json",
-        ],
-        capture_output=True, text=True, timeout=300, check=False,
-    )  # fmt: skip
+        ["gcloud", *args, "--format=json"], capture_output=True, text=True, timeout=300, check=False
+    )
     if result.returncode != 0:
-        raise RuntimeError(f"Cloud Asset search failed:\n{result.stderr.strip()}")
+        raise RuntimeError(f"gcloud {args[0]} {args[1]} failed:\n{result.stderr.strip()}")
     return json.loads(result.stdout or "[]")
 
 
 def discover(project: str, asset_types: list[str] | None = None) -> Discovery:
-    return parse_assets(search_assets(project, asset_types or sorted(SUPPORTED)))
+    asset_types = asset_types or sorted(SUPPORTED)
+    assets = gcloud_json(
+        "asset",
+        "search-all-resources",
+        f"--scope=projects/{project}",
+        f"--asset-types={','.join(asset_types)}",
+    )
+    owned = {}
+    if "compute.googleapis.com/Subnetwork" in asset_types:
+        owned = auto_subnets(gcloud_json("compute", "networks", "list", f"--project={project}"))
+    return parse_assets(assets, owned)

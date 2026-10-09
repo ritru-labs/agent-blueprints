@@ -150,12 +150,24 @@ def file_sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def gcloud_access_token() -> str | None:
+    """Short-lived token for the active gcloud login, so Terraform reads as the same identity as discovery."""
+    result = subprocess.run(
+        ["gcloud", "auth", "print-access-token"], capture_output=True, text=True, timeout=60, check=False
+    )
+    return result.stdout.strip() if result.returncode == 0 and result.stdout.strip() else None
+
+
 class Workspace:
-    def __init__(self, directory: Path, timeout: int = 900):
-        self.dir, self.timeout = directory, timeout
+    def __init__(self, directory: Path, timeout: int = 900, access_token=None):
+        # access_token: optional callable returning a GCP OAuth token; fetched per run because tokens expire.
+        self.dir, self.timeout, self.access_token = directory, timeout, access_token
 
     def terraform(self, *args: str) -> subprocess.CompletedProcess:
         env = {**os.environ, "TF_IN_AUTOMATION": "1", "TF_INPUT": "0"}
+        token = self.access_token() if self.access_token else None
+        if token:
+            env["GOOGLE_OAUTH_ACCESS_TOKEN"] = token
         return subprocess.run(
             ["terraform", *args], cwd=self.dir, env=env,
             capture_output=True, text=True, timeout=self.timeout, check=False,

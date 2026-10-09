@@ -1,4 +1,4 @@
-from gcp_iac_agent.discover import parse_assets
+from gcp_iac_agent.discover import auto_subnets, parse_assets
 
 ASSETS = [
     {
@@ -41,3 +41,26 @@ def test_skips_terraform_owned_and_unsupported_resources_with_reasons():
     skipped = parse_assets(ASSETS).skipped
     assert any("tf-made" in s and "already managed by Terraform" in s for s in skipped)
     assert any("sqladmin" in s and "not supported" in s for s in skipped)
+
+
+def test_subnets_of_auto_mode_networks_are_skipped_not_imported():
+    networks = [
+        {
+            "name": "default",
+            "autoCreateSubnetworks": True,
+            "subnetworks": [
+                "https://www.googleapis.com/compute/v1/projects/p/regions/europe-west1/subnetworks/app"
+            ],
+        },
+        {
+            "name": "prod-vpc",
+            "autoCreateSubnetworks": False,
+            "subnetworks": [
+                "https://www.googleapis.com/compute/v1/projects/p/regions/us-central1/subnetworks/app"
+            ],
+        },
+    ]
+    found = parse_assets(ASSETS, auto_subnets(networks))
+    subnets = {r.import_id for r in found.resources if r.tf_type == "google_compute_subnetwork"}
+    assert subnets == {"projects/p/regions/us-central1/subnetworks/app"}
+    assert any("auto-created by auto-mode network default" in s for s in found.skipped)

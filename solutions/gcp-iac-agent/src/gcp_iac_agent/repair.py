@@ -55,34 +55,37 @@ def make_client() -> tuple[anthropic.Anthropic | anthropic.AnthropicVertex, bool
     return anthropic.Anthropic(), True
 
 
+def build_prompt(config: str, plan_summary: dict, feedback: list[str]) -> str:
+    problem = {
+        "errors": plan_summary["errors"],
+        "changes": plan_summary["changes"],
+        "previous_attempts": feedback,
+    }
+    return f"<plan>\n{json.dumps(problem, indent=2)}\n</plan>\n\n<generated.tf>\n{config}\n</generated.tf>"
+
+
+def check_size(config: str) -> None:
+    if len(config) > MAX_CONFIG_CHARS:
+        raise RepairUnavailable(
+            "generated.tf is too large for one repair call; narrow the scope with --types"
+        )
+
+
 class Repairer:
+    """Claude. Uses the Anthropic API key, or Claude on Vertex AI when ANTHROPIC_VERTEX_PROJECT_ID is set."""
+
     def __init__(self, client=None, first_party: bool = False):
         self.client, self.first_party = client, first_party  # created on first use
 
     def __call__(self, config: str, plan_summary: dict, feedback: list[str]) -> RepairPlan:
         if self.client is None:
             self.client, self.first_party = make_client()
-        if len(config) > MAX_CONFIG_CHARS:
-            raise RepairUnavailable(
-                "generated.tf is too large for one repair call; narrow the scope with --types"
-            )
-        problem = {
-            "errors": plan_summary["errors"],
-            "changes": plan_summary["changes"],
-            "previous_attempts": feedback,
-        }
-        messages = [
-            {
-                "role": "user",
-                "content": f"<plan>\n{json.dumps(problem, indent=2)}\n</plan>\n\n"
-                f"<generated.tf>\n{config}\n</generated.tf>",
-            }
-        ]
+        check_size(config)
         kwargs = {
             "model": MODEL,
             "max_tokens": 16000,
             "system": SYSTEM,
-            "messages": messages,
+            "messages": [{"role": "user", "content": build_prompt(config, plan_summary, feedback)}],
             "output_format": RepairPlan,
             "output_config": {"effort": "high"},
         }
@@ -100,3 +103,52 @@ class Repairer:
         if response.stop_reason in ("refusal", "max_tokens") or response.parsed_output is None:
             raise RepairUnavailable(f"model returned no usable repair (stop_reason={response.stop_reason})")
         return response.parsed_output
+
+
+GEMINI_MODEL = os.environ.get("GCP_IAC_AGENT_GEMINI_MODEL", "gemini-2.5-flash")
+
+
+class GeminiRepairer:
+    """Gemini via the Google GenAI SDK. Reads GEMINI_API_KEY from the environment; the key is never passed in code."""
+
+    def __init__(self, client=None):
+        self.client = client  # created on first use
+
+    def __call__(self, config: str, plan_summary: dict, feedback: list[str]) -> RepairPlan:
+        from google import genai
+        from google.genai import types
+
+        if self.client is None:
+            if not os.environ.get("GEMINI_API_KEY"):
+                raise RepairUnavailable("GEMINI_API_KEY is not set")
+            # Explicit key and Gemini API (not Vertex): otherwise the SDK may fall back to the gcloud OAuth token.
+            self.client = genai.Client(api_key=os.environ["GEMINI_API_KEY"], vertexai=False)
+        check_size(config)
+        response = self.client.models.generate_content(
+            model=GEMINI_MODEL,
+            contents=build_prompt(config, plan_summary, feedback),
+            config=types.GenerateContentConfig(
+                system_instruction=SYSTEM,
+                response_mime_type="application/json",
+                response_schema=RepairPlan,
+                max_output_tokens=16000,
+                temperature=0.2,
+            ),
+        )
+        if response.parsed is None:
+            raise RepairUnavailable(
+                f"model returned no usable repair (finish_reason={response.candidates[0].finish_reason})"
+            )
+        return RepairPlan.model_validate(
+            response.parsed.model_dump() if isinstance(response.parsed, BaseModel) else response.parsed
+        )
+
+
+def make_repairer():
+    """GCP_IAC_AGENT_PROVIDER=gemini (default) or anthropic."""
+    provider = os.environ.get("GCP_IAC_AGENT_PROVIDER", "gemini")
+    if provider == "gemini":
+        return GeminiRepairer()
+    if provider == "anthropic":
+        return Repairer()
+    raise RepairUnavailable(f"unknown GCP_IAC_AGENT_PROVIDER: {provider}")

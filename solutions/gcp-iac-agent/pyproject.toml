@@ -5,6 +5,7 @@ description = "Bring hand-built GCP infrastructure under Terraform with zero cha
 requires-python = ">=3.11"
 dependencies = [
     "anthropic[vertex]>=0.70",
+    "google-genai>=2.29.0",
     "langgraph>=0.6",
     "langgraph-checkpoint-sqlite>=2.0",
     "pydantic>=2.7",
