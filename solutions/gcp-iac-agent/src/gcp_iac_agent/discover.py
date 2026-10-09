@@ -21,7 +21,14 @@ SUPPORTED = {
     "compute.googleapis.com/Router": "google_compute_router",
     ROUTER_NAT: "google_compute_router_nat",
     "storage.googleapis.com/Bucket": "google_storage_bucket",
+    "iam.googleapis.com/ServiceAccount": "google_service_account",
+    # The secret container only (name, replication, labels). Secret versions hold the actual values and
+    # are never imported: they would be written in plain text to generated.tf and Terraform state.
+    "secretmanager.googleapis.com/Secret": "google_secret_manager_secret",
 }
+
+# Created and relied on by Google itself; deleting them through Terraform would break project defaults.
+GOOGLE_DEFAULT_ACCOUNT = re.compile(r"/serviceAccounts/[^/]*@(developer|appspot)\.gserviceaccount\.com$")
 
 # Set by the Google provider on resources it creates: already owned by some Terraform state.
 TERRAFORM_LABEL = "goog-terraform-provisioned"
@@ -58,7 +65,8 @@ def import_id(asset_type: str, asset_name: str) -> str:
 
 
 def tf_name(asset_name: str, taken: set[str]) -> str:
-    base = re.sub(r"[^a-zA-Z0-9_]", "_", asset_name.rsplit("/", 1)[-1]).lower() or "resource"
+    last = asset_name.rsplit("/", 1)[-1].split("@", 1)[0]  # service account email -> its local part
+    base = re.sub(r"[^a-zA-Z0-9_]", "_", last).lower() or "resource"
     if not base[0].isalpha():
         base = "r_" + base
     name, n = base, 2
@@ -98,11 +106,17 @@ def parse_assets(assets: list[dict], auto_owned: dict[str, str] | None = None) -
     auto_owned = auto_owned or {}
     for asset in sorted(assets, key=lambda a: a["name"]):
         kind, name = asset.get("assetType", ""), asset["name"]
+        if kind == "secretmanager.googleapis.com/SecretVersion":
+            skipped.append(f"{name}: secret values are never imported into Terraform")
+            continue
         if kind not in SUPPORTED:
             skipped.append(f"{name}: type {kind} not supported yet")
             continue
         if TERRAFORM_LABEL in (asset.get("labels") or {}):
             skipped.append(f"{name}: already managed by Terraform ({TERRAFORM_LABEL} label)")
+            continue
+        if GOOGLE_DEFAULT_ACCOUNT.search(name):
+            skipped.append(f"{name}: Google-created default service account")
             continue
         if import_id(kind, name) in auto_owned:
             skipped.append(f"{name}: auto-created by auto-mode network {auto_owned[import_id(kind, name)]}")
@@ -136,6 +150,12 @@ def discover(project: str, asset_types: list[str] | None = None) -> Discovery:
         )
     if ROUTER_NAT in asset_types:
         assets += router_nats(gcloud_json("compute", "routers", "list", f"--project={project}"))
+    if "secretmanager.googleapis.com/Secret" in asset_types:
+        # Some services name assets by project number; use the project ID so the config reads naturally.
+        number = gcloud_json("projects", "describe", project)["projectNumber"]
+        assets = [
+            {**a, "name": a["name"].replace(f"/projects/{number}/", f"/projects/{project}/")} for a in assets
+        ]
     owned = {}
     if "compute.googleapis.com/Subnetwork" in asset_types:
         owned = auto_subnets(gcloud_json("compute", "networks", "list", f"--project={project}"))

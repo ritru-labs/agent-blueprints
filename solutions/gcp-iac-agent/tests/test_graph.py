@@ -28,6 +28,12 @@ class FakeWorkspace:
     def generate_config(self):
         return []
 
+    def generated_addresses(self):
+        return {"google_compute_network.prod_vpc"}
+
+    def write_imports(self, resources):
+        self.imports = [r["import_id"] for r in resources]
+
     def plan(self, expected_imports):
         from gcp_iac_agent.terraform import Change, Plan
 
@@ -139,3 +145,25 @@ def test_nothing_discovered_ends_cleanly():
     )
     graph.invoke({"project": "p"}, CONFIG)
     assert graph.get_state(CONFIG).values["status"] == "NOTHING_TO_IMPORT"
+
+
+STALE = Resource(
+    "secretmanager.googleapis.com/Secret", "google_secret_manager_secret", "gone", "projects/p/secrets/gone"
+)
+
+
+def test_resources_terraform_cannot_read_are_dropped_with_a_reason():
+    ws = FakeWorkspace()
+    graph = build_graph(
+        workspace=ws,
+        discover=lambda project, types: Discovery([NETWORK, STALE], []),
+        repairer=FakeRepairer(),
+        checkpointer=InMemorySaver(),
+    )
+    graph.invoke({"project": "p"}, CONFIG)
+    state = graph.get_state(CONFIG)
+    assert state.next == ("review",)
+    assert [r["tf_name"] for r in state.values["resources"]] == ["prod_vpc"]
+    assert ws.imports == ["projects/p/global/networks/prod-vpc"]
+    review = state.tasks[0].interrupts[0].value
+    assert any("projects/p/secrets/gone: Terraform could not read it" in s for s in review["skipped"])

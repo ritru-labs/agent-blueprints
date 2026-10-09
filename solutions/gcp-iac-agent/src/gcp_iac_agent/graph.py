@@ -49,8 +49,24 @@ def build_graph(
 
     def scaffold_node(state: State):
         workspace.scaffold(state["project"], state["resources"], provider_version, state_bucket)
-        workspace.generate_config()
-        return {"attempts": 0}
+        errors = workspace.generate_config()
+        present = workspace.generated_addresses()
+        kept, skipped = [], list(state.get("skipped", []))
+        for r in state["resources"]:
+            address = f"{r['tf_type']}.{r['tf_name']}"
+            if address in present:
+                kept.append(r)
+                continue
+            # Listed by Cloud Asset but unreadable now (deleted since indexing, or no permission).
+            why = next(
+                (e for e in errors if address in e or r["import_id"] in e), "no configuration generated"
+            )
+            skipped.append(f"{r['import_id']}: Terraform could not read it ({why[:200]})")
+        if len(kept) != len(state["resources"]):
+            workspace.write_imports(kept)
+        if not kept:
+            return {"resources": [], "skipped": skipped, "status": "NOTHING_TO_IMPORT", "attempts": 0}
+        return {"resources": kept, "skipped": skipped, "attempts": 0}
 
     def plan_node(state: State):
         return {"plan": workspace.plan(len(state["resources"])).summary()}
@@ -125,7 +141,7 @@ def build_graph(
         graph.add_node(name, node)
     graph.add_edge(START, "discover")
     graph.add_conditional_edges("discover", lambda s: END if not s["resources"] else "scaffold")
-    graph.add_edge("scaffold", "plan")
+    graph.add_conditional_edges("scaffold", lambda s: END if not s["resources"] else "plan")
     graph.add_conditional_edges("plan", after_plan, ["review", "repair", "stuck"])
     graph.add_edge("repair", "plan")
     graph.add_edge("stuck", END)

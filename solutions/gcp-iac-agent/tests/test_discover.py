@@ -78,3 +78,32 @@ def test_cloud_nat_is_read_from_routers_with_terraform_import_id():
     assert [(r.address, r.import_id) for r in found.resources] == [
         ("google_compute_router_nat.nat_1", "projects/p/regions/asia-south1/routers/r1/nat-1")
     ]
+
+
+def test_service_accounts_and_secrets_never_include_secret_values_or_google_defaults():
+    found = parse_assets(
+        [
+            {
+                "assetType": "iam.googleapis.com/ServiceAccount",
+                "name": "//iam.googleapis.com/projects/p/serviceAccounts/ci-vm@p.iam.gserviceaccount.com",
+            },
+            {
+                "assetType": "iam.googleapis.com/ServiceAccount",
+                "name": "//iam.googleapis.com/projects/p/serviceAccounts/123-compute@developer.gserviceaccount.com",
+            },
+            {
+                "assetType": "secretmanager.googleapis.com/Secret",
+                "name": "//secretmanager.googleapis.com/projects/p/secrets/admin-password",
+            },
+            {
+                "assetType": "secretmanager.googleapis.com/SecretVersion",
+                "name": "//secretmanager.googleapis.com/projects/p/secrets/admin-password/versions/1",
+            },
+        ]
+    )
+    assert [(r.address, r.import_id) for r in found.resources] == [
+        ("google_service_account.ci_vm", "projects/p/serviceAccounts/ci-vm@p.iam.gserviceaccount.com"),
+        ("google_secret_manager_secret.admin_password", "projects/p/secrets/admin-password"),
+    ]
+    assert any("Google-created default service account" in s for s in found.skipped)
+    assert any("secret values are never imported" in s for s in found.skipped)

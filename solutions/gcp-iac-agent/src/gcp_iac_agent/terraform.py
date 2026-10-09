@@ -203,10 +203,6 @@ class Workspace:
             # One state object per workspace, so separate runs never share (or overwrite) state.
             prefix = f"gcp-iac-agent/{self.dir.resolve().name}"
             (self.dir / "backend.tf").write_text(BACKEND_TF.format(bucket=state_bucket, prefix=prefix))
-        blocks = [
-            f"import {{\n  to = {r['tf_type']}.{r['tf_name']}\n  id = {json.dumps(r['import_id'])}\n}}\n"
-            for r in resources
-        ]
         init = self.terraform("init", "-input=false", "-no-color")
         if init.returncode != 0:
             raise TerraformError(f"terraform init failed:\n{init.stderr.strip()}")
@@ -216,16 +212,14 @@ class Workspace:
             raise TerraformError(
                 f"this workspace's state already manages {len(managed)} resources; use a new --workspace"
             )
-        (self.dir / "imports.tf").write_text("\n".join(blocks))
+        self.write_imports(resources)
         (self.dir / GENERATED).unlink(missing_ok=True)
 
     def generate_config(self) -> list[str]:
         """Let Terraform write the HCL for every import block; errors in it are fine, repair fixes them."""
         result = self.terraform("plan", "-input=false", "-json", f"-generate-config-out={GENERATED}")
         if not (self.dir / GENERATED).exists():
-            raise TerraformError(
-                "terraform did not generate configuration:\n" + "\n".join(diagnostics(result.stdout))
-            )
+            (self.dir / GENERATED).write_text("")  # nothing readable; the caller drops every import
         return diagnostics(result.stdout)
 
     # --- the loop ----------------------------------------------------------
@@ -241,6 +235,19 @@ class Workspace:
             raise TerraformError(f"terraform show failed:\n{shown.stderr.strip()}")
         changes = parse_plan_json(json.loads(shown.stdout))
         return Plan([], changes, expected_imports, file_sha256(self.dir / PLAN_FILE))
+
+    def generated_addresses(self) -> set[str]:
+        return {
+            f"{t}.{n}"
+            for t, n in re.findall(r'^resource\s+"([a-z0-9_]+)"\s+"([^"]+)"', self.generated(), re.MULTILINE)
+        }
+
+    def write_imports(self, resources: list[dict]) -> None:
+        blocks = [
+            f"import {{\n  to = {r['tf_type']}.{r['tf_name']}\n  id = {json.dumps(r['import_id'])}\n}}\n"
+            for r in resources
+        ]
+        (self.dir / "imports.tf").write_text("\n".join(blocks))
 
     def generated(self) -> str:
         return (self.dir / GENERATED).read_text()
