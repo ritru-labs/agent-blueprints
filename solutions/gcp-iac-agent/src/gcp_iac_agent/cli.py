@@ -12,6 +12,7 @@ from .discover import SUPPORTED, discover
 from .graph import build_graph
 from .repair import make_repairer
 from .terraform import GENERATED, TerraformError, Workspace, gcloud_access_token
+from .tidy import remaining_literals, tidy
 
 STATE_DB = ".agent-state.sqlite"
 
@@ -92,12 +93,27 @@ def main(argv: list[str] | None = None) -> int:
         "--state-bucket",
         help="GCS bucket for Terraform state (one object per workspace); default: local state file",
     )
+    parser.add_argument(
+        "--tidy",
+        action="store_true",
+        help="After import: split into files per service and use references; plan must stay at zero changes",
+    )
     args = parser.parse_args(argv)
 
     args.workspace.mkdir(parents=True, exist_ok=True)
     token = gcloud_access_token if args.credentials == "gcloud" else None
     workspace = Workspace(args.workspace, access_token=token)
     config = {"configurable": {"thread_id": args.project}}
+
+    if args.tidy:
+        try:
+            result = tidy(workspace, args.project)
+        except TerraformError as exc:
+            print(f"error: {exc}\nNo files were changed.", file=sys.stderr)
+            return 1
+        result["cross_state_links_left_as_ids"] = remaining_literals(args.workspace)
+        print(json.dumps(result, indent=2))
+        return 0
 
     with SqliteSaver.from_conn_string(str(args.workspace / STATE_DB)) as saver:
         graph = build_graph(
