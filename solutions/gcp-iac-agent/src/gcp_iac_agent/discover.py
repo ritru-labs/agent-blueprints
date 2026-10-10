@@ -7,6 +7,7 @@ from dataclasses import asdict, dataclass
 
 # Cloud NAT lives inside a router and is not a Cloud Asset type; it is read from the router list.
 ROUTER_NAT = "compute.googleapis.com/RouterNat"
+SERVICE = "serviceusage.googleapis.com/Service"
 # Project IAM grants are not Cloud Asset resources either; they are read from the project's IAM policy.
 PROJECT_IAM = "cloudresourcemanager.googleapis.com/ProjectIamMember"
 DERIVED = {ROUTER_NAT, PROJECT_IAM}
@@ -30,6 +31,9 @@ SUPPORTED = {
     # The secret container only (name, replication, labels). Secret versions hold the actual values and
     # are never imported: they would be written in plain text to generated.tf and Terraform state.
     "secretmanager.googleapis.com/Secret": "google_secret_manager_secret",
+    # Enabled APIs. The workspace always sets disable_on_destroy = false on these, so removing one
+    # from Terraform later never disables the API in GCP.
+    SERVICE: "google_project_service",
 }
 
 # Created and relied on by Google itself; deleting them through Terraform would break project defaults.
@@ -64,6 +68,9 @@ def import_id(asset_type: str, asset_name: str) -> str:
     # Asset names look like //compute.googleapis.com/projects/p/global/networks/n.
     if asset_type == "storage.googleapis.com/Bucket":
         return asset_name.rsplit("/", 1)[-1]
+    if asset_type == SERVICE:  # Terraform wants PROJECT/SERVICE
+        _, project, _, service = asset_name.split(".googleapis.com/", 1)[1].split("/")
+        return f"{project}/{service}"
     if asset_type == ROUTER_NAT:  # Terraform wants .../routers/ROUTER/NAT, without "nats/"
         return asset_name.split(".googleapis.com/", 1)[1].replace("/nats/", "/")
     return asset_name.split(".googleapis.com/", 1)[1]
@@ -71,6 +78,7 @@ def import_id(asset_type: str, asset_name: str) -> str:
 
 def tf_name(asset_name: str, taken: set[str]) -> str:
     last = asset_name.rsplit("/", 1)[-1].split("@", 1)[0]  # service account email -> its local part
+    last = last.removesuffix(".googleapis.com")  # API name -> its short name
     base = re.sub(r"[^a-zA-Z0-9_]", "_", last).lower() or "resource"
     if not base[0].isalpha():
         base = "r_" + base
@@ -193,7 +201,7 @@ def discover(project: str, asset_types: list[str] | None = None) -> Discovery:
         )
     if ROUTER_NAT in asset_types:
         assets += router_nats(gcloud_json("compute", "routers", "list", f"--project={project}"))
-    if "secretmanager.googleapis.com/Secret" in asset_types:
+    if assets:
         # Some services name assets by project number; use the project ID so the config reads naturally.
         number = gcloud_json("projects", "describe", project)["projectNumber"]
         assets = [

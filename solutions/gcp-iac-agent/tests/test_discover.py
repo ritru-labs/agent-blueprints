@@ -137,3 +137,17 @@ def test_only_grants_to_project_service_accounts_are_imported():
     assert any("human or group access" in s for s in skipped)
     assert any("Google-managed service account" in s for s in skipped)
     assert any("conditional grant" in s for s in skipped)
+
+
+def test_enabled_apis_map_to_project_services():
+    found = parse_assets(
+        [
+            {
+                "assetType": "serviceusage.googleapis.com/Service",
+                "name": "//serviceusage.googleapis.com/projects/p/services/iap.googleapis.com",
+            }
+        ]
+    )
+    assert [(r.address, r.import_id) for r in found.resources] == [
+        ("google_project_service.iap", "p/iap.googleapis.com")
+    ]

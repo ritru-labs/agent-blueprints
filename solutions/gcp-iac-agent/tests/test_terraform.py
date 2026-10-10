@@ -15,6 +15,7 @@ from gcp_iac_agent.terraform import (
     check_generated,
     diagnostics,
     parse_plan_json,
+    safe_defaults,
 )
 
 NETWORK = 'resource "google_compute_network" "prod_vpc" {\n  name = "prod-vpc"\n  mtu  = 1460\n}\n'
@@ -237,3 +238,16 @@ def test_scaffold_writes_one_state_prefix_per_workspace(fake_terraform):
     ws.scaffold("p", [{"tf_type": "t", "tf_name": "n", "import_id": "i"}], ">= 6.0", state_bucket="b")
     backend = (ws.dir / "backend.tf").read_text()
     assert 'bucket = "b"' in backend and 'prefix = "gcp-iac-agent/work"' in backend
+
+
+def test_project_services_never_disable_the_api_when_removed_from_terraform():
+    text = (
+        'resource "google_project_service" "iap" {\n  disable_on_destroy         = null\n'
+        '  service                    = "iap.googleapis.com"\n}\n\n'
+        'resource "google_compute_instance" "vm" {\n  disable_on_destroy = null\n}\n'
+    )
+    out = safe_defaults(text)
+    assert 'resource "google_project_service" "iap" {\n  disable_on_destroy         = false\n' in out
+    assert (
+        'resource "google_compute_instance" "vm" {\n  disable_on_destroy = null\n' in out
+    )  # other types untouched

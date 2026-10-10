@@ -154,6 +154,18 @@ def check_generated(text: str, allowed_types: set[str]) -> None:
             raise UnsafeEdit(f"{GENERATED} may only contain resource blocks of imported types: {line!r}")
 
 
+def safe_defaults(text: str) -> str:
+    """Fixed policy, not a model decision: removing an API from Terraform must never disable it in GCP."""
+    out, in_service = [], False
+    for line in text.splitlines(keepends=True):
+        if line.startswith("resource "):
+            in_service = line.startswith('resource "google_project_service" ')
+        if in_service and re.match(r"\s+disable_on_destroy\s*=", line):
+            line = re.sub(r"=\s*\S+", "= false", line, count=1)
+        out.append(line)
+    return "".join(out)
+
+
 def resource_block(text: str, address: str) -> tuple[int, int]:
     """Span of `resource "TYPE" "NAME" { ... }`. Terraform writes the closing brace at column 0."""
     tf_type, _, name = address.partition(".")
@@ -220,6 +232,7 @@ class Workspace:
         result = self.terraform("plan", "-input=false", "-json", f"-generate-config-out={GENERATED}")
         if not (self.dir / GENERATED).exists():
             (self.dir / GENERATED).write_text("")  # nothing readable; the caller drops every import
+        (self.dir / GENERATED).write_text(safe_defaults(self.generated()))
         return diagnostics(result.stdout)
 
     # --- the loop ----------------------------------------------------------
@@ -265,6 +278,7 @@ class Workspace:
                     f"{edit['old'][:120]!r}"
                 )
             text = text[:start] + block.replace(edit["old"], edit["new"]) + text[end:]
+        text = safe_defaults(text)  # the model cannot undo the fixed policy
         check_generated(text, allowed_types)
         (self.dir / GENERATED).write_text(text)
 
